@@ -256,7 +256,7 @@ class WebhookNotifier:
                 "fields": [
                     {"name": "Status", "value": f"`{details.status}`", "inline": True},
                     {"name": "Location", "value": f"📍 `{details.current_location}`", "inline": True},
-                    {"name": "Estimated Delivery", "value": eta_val, "inline": True},
+                    {"name": "Estimated Delivery", "value": eta_val, "inline": False},
                     {"name": "Nearest Hub", "value": "✅ Arrived" if details.reached_nearest_hub else "⏳ On Route", "inline": True},
                     {"name": "Delivered", "value": "✅ YES" if details.is_delivered else "⏳ In Progress", "inline": True},
                     {"name": "Recent Milestones", "value": timeline_text, "inline": False}

@@ -103,41 +103,44 @@ def create_discord_embed(details: ShipmentDetails, event_type: str = "Status", l
         color = 0x0EA5E9 # Cyan
         status_icon = "📦"
 
-    title = f"📦 Ekart Shipment: {details.tracking_id}"
+    title = f"📦 Ekart: {details.tracking_id}"
     embed = discord.Embed(title=title, color=color, timestamp=datetime.now(timezone.utc))
     embed.set_author(name="Ekart Logistics Tracker", icon_url=EKART_LOGO_URL)
-    embed.set_thumbnail(url=EKART_LOGO_URL)
+    # Note: We omit embed.set_thumbnail() so mobile Discord gets 100% full width without text squeezing
 
     progress_str = get_progress_bar(details.status)
     desc_lines = []
-    if label:
-        desc_lines.append(f"🏷️ **Item:** `{label}`")
+    clean_lbl = label.strip() if label else ""
+    if clean_lbl and clean_lbl != f"Package {details.tracking_id}":
+        desc_lines.append(f"🏷️ **Item:** `{clean_lbl}`")
     desc_lines.append(f"**Status:** {status_icon} `{details.status.upper()}`")
     desc_lines.append(f"**Progress:** {progress_str}")
-    desc_lines.append(f"**Current Location:** 📍 **{details.current_location}**")
+    desc_lines.append(f"**Current Hub:** 📍 **{details.current_location}**")
     embed.description = "\n".join(desc_lines)
 
     # Smart ETA formatting with Discord native relative timestamp
     if details.expected_delivery_epoch:
-        eta_val = f"<t:{details.expected_delivery_epoch}:D>\n└ <t:{details.expected_delivery_epoch}:R>"
+        eta_val = f"<t:{details.expected_delivery_epoch}:D> (<t:{details.expected_delivery_epoch}:R>)"
     elif details.expected_delivery_date:
         eta_val = f"**{details.expected_delivery_date}**"
     else:
         eta_val = "*To be announced*"
 
-    embed.add_field(name="📅 Estimated Delivery", value=eta_val, inline=True)
+    embed.add_field(name="📅 Estimated Delivery", value=eta_val, inline=False)
     embed.add_field(name="📍 Nearest Hub", value="✅ Arrived" if details.reached_nearest_hub else "⏳ On Route", inline=True)
     embed.add_field(name="🏁 Delivered", value="✅ YES" if details.is_delivered else "⏳ In Progress", inline=True)
 
-    # Deduplicated milestones timeline with tree connectors
+    # Mobile-optimized deduplicated milestones timeline
     milestones = details.deduplicated_milestones
     if milestones:
         timeline_entries = []
         for idx, m in enumerate(reversed(milestones[-5:])):
             prefix = "🟢" if idx == 0 else "•"
-            time_display = f"{m.date_str} • {m.time_str}"
-            city_display = f"**{m.city}**" if m.city and m.city != "N/A" else ""
-            header = f"{prefix} **{time_display}** {f'({city_display})' if city_display else ''}"
+            city_str = f"({m.city})" if m.city and m.city != "N/A" else ""
+            d_str = m.date_str.replace(", 2026", "").replace(" 2026", "").strip()
+            t_str = m.time_str.replace(" IST", "").strip()
+            time_display = f"{d_str}, {t_str}" if d_str else t_str
+            header = f"{prefix} **{time_display}** {city_str}"
             detail = f"  └── *{m.status_details}*"
             timeline_entries.append(f"{header}\n{detail}")
         embed.add_field(name="🚚 Recent Activity Timeline", value="\n".join(timeline_entries), inline=False)
