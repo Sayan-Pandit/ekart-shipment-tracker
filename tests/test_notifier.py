@@ -36,12 +36,22 @@ class TestNotifier(unittest.TestCase):
 
     def test_webhook_dry_run(self):
         notifier = WebhookNotifier()
+        notifier.webhook_url = ""
+        notifier.discord_bot_token = ""
+        notifier.discord_channel_id = ""
+        notifier.discord_user_id = ""
+        notifier.telegram_bot_token = ""
         success, msg = notifier.send("FMPC_TEST", "Test Subject", self.sample_details)
         self.assertTrue(success)
         self.assertIn("Simulated", msg)
 
     def test_dual_notification_dispatch(self):
         manager = DualNotificationManager()
+        manager.webhook_notifier.webhook_url = ""
+        manager.webhook_notifier.discord_bot_token = ""
+        manager.webhook_notifier.discord_channel_id = ""
+        manager.webhook_notifier.discord_user_id = ""
+        manager.webhook_notifier.telegram_bot_token = ""
         results = manager.notify_status_change(self.sample_details, old_status="In Transit")
         self.assertIn("email", results)
         self.assertIn("webhook", results)

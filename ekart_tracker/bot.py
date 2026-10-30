@@ -115,7 +115,12 @@ def setup_bot() -> commands.Bot:
         is_sim = simulate or clean_id.startswith("SIM-") or clean_id.startswith("DEMO-")
         await interaction.response.defer(thinking=True)
 
-        storage.add_shipment(clean_id, label=label or f"Package {clean_id}", is_simulated=is_sim)
+        storage.add_shipment(
+            clean_id,
+            label=label or f"Package {clean_id}",
+            is_simulated=is_sim,
+            notify_target=str(interaction.channel_id) if interaction.channel_id else None
+        )
         try:
             details = tracker.track(clean_id, force_simulated=is_sim)
             storage.update_shipment_details(details)
@@ -238,7 +243,12 @@ def setup_bot() -> commands.Bot:
     async def cmd_track(ctx: commands.Context, tracking_id: str, *, label: str = ""):
         clean_id = tracking_id.strip().upper()
         is_sim = clean_id.startswith("SIM-") or clean_id.startswith("DEMO-")
-        storage.add_shipment(clean_id, label=label or f"Package {clean_id}", is_simulated=is_sim)
+        storage.add_shipment(
+            clean_id,
+            label=label or f"Package {clean_id}",
+            is_simulated=is_sim,
+            notify_target=str(interaction.channel_id) if interaction.channel_id else None
+        )
         try:
             details = tracker.track(clean_id, force_simulated=is_sim)
             storage.update_shipment_details(details)

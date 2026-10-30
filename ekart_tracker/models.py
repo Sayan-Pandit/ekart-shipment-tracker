@@ -107,6 +107,7 @@ class TrackedShipment:
     last_checked_at: Optional[str]
     is_active: bool
     milestones: List[Milestone] = field(default_factory=list)
+    notify_target: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -119,7 +120,8 @@ class TrackedShipment:
             "created_at": self.created_at,
             "last_checked_at": self.last_checked_at,
             "is_active": self.is_active,
-            "milestones": [m.to_dict() for m in self.milestones]
+            "milestones": [m.to_dict() for m in self.milestones],
+            "notify_target": self.notify_target
         }
 
 @dataclass

@@ -248,8 +248,8 @@ class TrackingServerDaemon:
                         # Status change detection
                         if details.status != old_status and details.status != ShipmentStatus.UNKNOWN:
                             logger.info("[Ekart Alert] STATUS CHANGE DETECTED for %s: '%s' -> '%s'", tracking_id, old_status, details.status)
-                            # Dispatch to both Email and Webhook
-                            self.notifier.notify_status_change(details, old_status)
+                            # Dispatch to both Email and Webhook (specifically targeting the requesting Discord channel/DM)
+                            self.notifier.notify_status_change(details, old_status, notify_target=shipment.notify_target)
 
                     except Exception as e:
                         logger.warning("Error during periodic check for %s: %s", tracking_id, e)

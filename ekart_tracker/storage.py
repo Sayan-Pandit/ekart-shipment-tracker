@@ -38,9 +38,16 @@ class TrackerStorage:
                     created_at TEXT,
                     last_checked_at TEXT,
                     is_active INTEGER DEFAULT 1,
-                    milestones_json TEXT
+                    milestones_json TEXT,
+                    notify_target TEXT
                 )
             """)
+
+            # Safe migration for existing databases
+            try:
+                cursor.execute("ALTER TABLE shipments ADD COLUMN notify_target TEXT")
+            except Exception:
+                pass
 
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS notifications (
@@ -65,7 +72,7 @@ class TrackerStorage:
         finally:
             conn.close()
 
-    def add_shipment(self, tracking_id: str, label: str = "", is_simulated: bool = False) -> TrackedShipment:
+    def add_shipment(self, tracking_id: str, label: str = "", is_simulated: bool = False, notify_target: Optional[str] = None) -> TrackedShipment:
         clean_id = tracking_id.strip().upper()
         now_str = datetime.now().isoformat()
         conn = self._get_connection()
@@ -74,12 +81,13 @@ class TrackerStorage:
             cursor.execute("""
                 INSERT INTO shipments (
                     tracking_id, label, is_simulated, current_status, expected_delivery,
-                    is_delivered, created_at, last_checked_at, is_active, milestones_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+                    is_delivered, created_at, last_checked_at, is_active, milestones_json, notify_target
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
                 ON CONFLICT(tracking_id) DO UPDATE SET
                     label = excluded.label,
                     is_active = 1,
-                    is_simulated = excluded.is_simulated
+                    is_simulated = excluded.is_simulated,
+                    notify_target = COALESCE(excluded.notify_target, shipments.notify_target)
             """, (
                 clean_id,
                 label or f"Ekart Package {clean_id}",
@@ -89,7 +97,8 @@ class TrackerStorage:
                 0,
                 now_str,
                 None,
-                json.dumps([])
+                json.dumps([]),
+                notify_target
             ))
             conn.commit()
         finally:
@@ -225,6 +234,11 @@ class TrackerStorage:
     def _row_to_shipment(self, row: sqlite3.Row) -> TrackedShipment:
         milestones_raw = json.loads(row["milestones_json"] or "[]")
         milestones = [Milestone.from_dict(m) for m in milestones_raw]
+        notify_target = None
+        try:
+            notify_target = row["notify_target"]
+        except Exception:
+            pass
         return TrackedShipment(
             tracking_id=row["tracking_id"],
             label=row["label"] or "",
@@ -235,5 +249,6 @@ class TrackerStorage:
             created_at=row["created_at"],
             last_checked_at=row["last_checked_at"],
             is_active=bool(row["is_active"]),
-            milestones=milestones
+            milestones=milestones,
+            notify_target=notify_target
         )

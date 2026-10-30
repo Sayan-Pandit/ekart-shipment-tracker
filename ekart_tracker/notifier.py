@@ -179,18 +179,18 @@ class WebhookNotifier:
             (self.telegram_bot_token and self.telegram_chat_id)
         )
 
-    def send(self, tracking_id: str, subject: str, details: ShipmentDetails, event_type: str = "update") -> Tuple[bool, str]:
+    def send(self, tracking_id: str, subject: str, details: ShipmentDetails, event_type: str = "update", notify_target: Optional[str] = None) -> Tuple[bool, str]:
         """
         Send a notification to Discord (Bot/Webhook) or Telegram/generic webhook.
         If not configured, operates in Dry-Run mode.
         """
-        if not self.is_configured():
+        if not self.is_configured() and not notify_target:
             logger.info("[Discord/Webhook Dry-Run] Neither Discord Bot nor Webhook URL configured. Simulated for %s", tracking_id)
             return True, "Simulated (Discord/Webhook credentials not set in .env)"
 
         # Priority 1: Direct Discord Bot Channel / DM Message
-        if self.discord_bot_token and (self.discord_channel_id or self.discord_user_id):
-            return self._send_discord_bot_api(details)
+        if self.discord_bot_token and (notify_target or self.discord_channel_id or self.discord_user_id):
+            return self._send_discord_bot_api(details, target_channel_id=notify_target)
 
         # Priority 2: Telegram Bot
         if self.telegram_bot_token and self.telegram_chat_id:
@@ -199,13 +199,13 @@ class WebhookNotifier:
         # Priority 3: Standard Webhook (Discord / Slack / Generic)
         return self._send_http_webhook(details, subject)
 
-    def _send_discord_bot_api(self, details: ShipmentDetails) -> Tuple[bool, str]:
+    def _send_discord_bot_api(self, details: ShipmentDetails, target_channel_id: Optional[str] = None) -> Tuple[bool, str]:
         headers = {
             "Authorization": f"Bot {self.discord_bot_token}",
             "Content-Type": "application/json"
         }
 
-        channel_id = self.discord_channel_id
+        channel_id = target_channel_id or self.discord_channel_id
         # If user ID is configured, resolve/create a private DM channel
         if not channel_id and self.discord_user_id:
             try:
@@ -339,7 +339,7 @@ class DualNotificationManager:
         self.webhook_notifier = WebhookNotifier()
         self.storage = storage
 
-    def notify_status_change(self, details: ShipmentDetails, old_status: Optional[str] = None) -> Dict[str, Tuple[bool, str]]:
+    def notify_status_change(self, details: ShipmentDetails, old_status: Optional[str] = None, notify_target: Optional[str] = None) -> Dict[str, Tuple[bool, str]]:
         """
         Dispatches alerts across both channels whenever a shipment status changes.
         """
@@ -362,9 +362,9 @@ class DualNotificationManager:
                     error_message=None if email_ok else email_msg
                 ))
 
-        # 2. Webhook Channel
+        # 2. Webhook / Discord Channel
         if config.webhook_enabled:
-            wh_ok, wh_msg = self.webhook_notifier.send(details.tracking_id, subject, details, event_type="status_change")
+            wh_ok, wh_msg = self.webhook_notifier.send(details.tracking_id, subject, details, event_type="status_change", notify_target=notify_target)
             results["webhook"] = (wh_ok, wh_msg)
             if self.storage:
                 self.storage.log_notification(NotificationRecord(
