@@ -54,6 +54,15 @@ class TestServerAPI(unittest.TestCase):
         self.assertIn("email", data["results"])
         self.assertIn("webhook", data["results"])
 
+    def test_terms_and_privacy_endpoints(self):
+        resp_terms = self.client.get("/terms")
+        self.assertEqual(resp_terms.status_code, 200)
+        self.assertIn(b"Terms of Service", resp_terms.data)
+
+        resp_priv = self.client.get("/privacy")
+        self.assertEqual(resp_priv.status_code, 200)
+        self.assertIn(b"Privacy Policy", resp_priv.data)
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -124,6 +124,10 @@ class TrackingServerDaemon:
 
     <div class="footer">
       Running on Render Cloud &bull; Timezone: IST (UTC+05:30) &bull; Uptime: {uptime_seconds}s
+      <div style="margin-top: 10px;">
+        <a href="/terms" style="color: #38bdf8; text-decoration: none; margin-right: 16px;">📜 Terms of Service</a>
+        <a href="/privacy" style="color: #38bdf8; text-decoration: none;">🔒 Privacy Policy</a>
+      </div>
     </div>
   </div>
 </body>
@@ -150,6 +154,115 @@ class TrackingServerDaemon:
                     "connected": bool(config.discord_bot_token)
                 }
             })
+
+        @self.app.route("/terms", methods=["GET"])
+        def api_terms():
+            html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terms of Service - Ekart Shipment Tracker</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 40px 20px; display: flex; justify-content: center; line-height: 1.6; }
+    .container { max-width: 720px; width: 100%; background: #1e293b; border-radius: 16px; padding: 36px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); border: 1px solid #334155; }
+    h1 { color: #38bdf8; font-size: 26px; margin-top: 0; }
+    h2 { color: #f1f5f9; font-size: 18px; margin-top: 24px; border-bottom: 1px solid #334155; padding-bottom: 6px; }
+    p, li { color: #cbd5e1; font-size: 14px; }
+    a { color: #38bdf8; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .badge { display: inline-block; background: #1e3a8a; color: #93c5fd; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; margin-bottom: 12px; }
+    .footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid #334155; font-size: 12px; color: #64748b; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="badge">LEGAL DOCUMENT</div>
+    <h1>Terms of Service</h1>
+    <p><em>Last updated: October 30, 2026</em></p>
+
+    <h2>1. Acceptance of Terms</h2>
+    <p>By using the Ekart Shipment Tracker bot, Discord integration, REST API, or web services (collectively, the "Service"), you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the Service.</p>
+
+    <h2>2. Description of Service</h2>
+    <p>The Service provides package monitoring, milestone tracking, and status notification alerts for shipments handled by Ekart Logistics. The Service queries publicly accessible tracking endpoints to deliver consolidated notifications via Discord and Email.</p>
+
+    <h2>3. Disclaimer of Affiliation</h2>
+    <p>Ekart Shipment Tracker is an independent utility created for personal and developer convenience. The Service is <strong>not affiliated with, authorized, maintained, sponsored, or endorsed</strong> by Flipkart Internet Pvt. Ltd., Ekart Logistics, or any of their affiliates.</p>
+
+    <h2>4. Permitted Use & Rate Limiting</h2>
+    <ul>
+      <li>You agree to use the Service solely for legitimate package tracking purposes.</li>
+      <li>You shall not attempt to reverse engineer, abuse, or flood the Service or carrier endpoints with excessive requests.</li>
+      <li>Rate limits are enforced to protect carrier infrastructure and maintain reliability for all users.</li>
+    </ul>
+
+    <h2>5. "As Is" Warranty Disclaimer</h2>
+    <p>The Service and tracking information are provided on an <strong>"AS IS" and "AS AVAILABLE"</strong> basis without warranties of any kind. We do not guarantee uninterrupted availability, timeliness, or 100% accuracy of courier tracking statuses.</p>
+
+    <div class="footer">
+      <a href="/">← Return to Dashboard</a> &bull; <a href="/privacy">Privacy Policy</a>
+    </div>
+  </div>
+</body>
+</html>"""
+            return Response(html, mimetype="text/html")
+
+        @self.app.route("/privacy", methods=["GET"])
+        def api_privacy():
+            html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy - Ekart Shipment Tracker</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 40px 20px; display: flex; justify-content: center; line-height: 1.6; }
+    .container { max-width: 720px; width: 100%; background: #1e293b; border-radius: 16px; padding: 36px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); border: 1px solid #334155; }
+    h1 { color: #34d399; font-size: 26px; margin-top: 0; }
+    h2 { color: #f1f5f9; font-size: 18px; margin-top: 24px; border-bottom: 1px solid #334155; padding-bottom: 6px; }
+    p, li { color: #cbd5e1; font-size: 14px; }
+    a { color: #38bdf8; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .badge { display: inline-block; background: #064e3b; color: #6ee7b7; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; margin-bottom: 12px; }
+    .footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid #334155; font-size: 12px; color: #64748b; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="badge">DATA & PRIVACY</div>
+    <h1>Privacy Policy</h1>
+    <p><em>Last updated: October 30, 2026</em></p>
+
+    <h2>1. Information We Collect</h2>
+    <p>Ekart Shipment Tracker collects the minimum data required to deliver package tracking services:</p>
+    <ul>
+      <li><strong>Tracking IDs:</strong> The shipment tracking number (e.g. <code>FMPP...</code>) you submit for tracking.</li>
+      <li><strong>Discord Channel or User ID:</strong> To direct status change notifications back to the conversation or channel where you initiated tracking.</li>
+      <li><strong>User-Provided Labels:</strong> Optional nicknames assigned to packages (e.g. "Gift for Mom").</li>
+      <li><strong>Courier Milestones:</strong> Public transit events reported by the carrier (dates, locations, status).</li>
+    </ul>
+
+    <h2>2. Information We DO NOT Collect</h2>
+    <ul>
+      <li>We do <strong>not</strong> collect personal addresses, phone numbers, or recipient names.</li>
+      <li>We do <strong>not</strong> collect payment information, credit cards, or purchase amounts.</li>
+      <li>We do <strong>not</strong> access your Discord message history outside of bot commands.</li>
+    </ul>
+
+    <h2>3. Data Retention & Deletion</h2>
+    <p>Tracking records are retained only while a shipment remains active. Users can permanently delete any tracking record and its associated history immediately by running the <code>/remove &lt;id&gt;</code> command.</p>
+
+    <h2>4. Third-Party Sharing</h2>
+    <p>We do not sell, rent, monetize, or distribute any user information to advertisers or external third parties. Tracking requests communicate directly with Ekart's publicly accessible inquiry endpoints.</p>
+
+    <div class="footer">
+      <a href="/">← Return to Dashboard</a> &bull; <a href="/terms">Terms of Service</a>
+    </div>
+  </div>
+</body>
+</html>"""
+            return Response(html, mimetype="text/html")
 
         @self.app.route("/health", methods=["GET"])
         @self.app.route("/api/status", methods=["GET"])

@@ -320,8 +320,57 @@ def setup_bot() -> commands.Bot:
         embed.add_field(name="/simulate `<id>`", value="Advance a simulated package to test milestone alerts.", inline=False)
         embed.add_field(name="/remove `<id>`", value="Remove a package from tracking.", inline=False)
         embed.add_field(name="/notifytest", value="Send a sample notification embed to test channel integration.", inline=False)
+        embed.add_field(name="/stats", value="View real-time bot and database metrics.", inline=False)
+        embed.add_field(name="/terms", value="View official Terms of Service.", inline=False)
+        embed.add_field(name="/privacy", value="View Privacy Policy and data safety details.", inline=False)
         embed.set_footer(text=f"Prefix commands also supported using prefix '{config.discord_prefix}' (e.g. {config.discord_prefix}track)")
         await interaction.response.send_message(embed=embed)
+
+    @bot.tree.command(name="terms", description="View Terms of Service for Ekart Tracker")
+    async def slash_terms(interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="📜 Terms of Service - Ekart Tracker",
+            color=0x3B82F6,
+            description=(
+                "**1. Service Scope**\n"
+                "Ekart Tracker is a notification and monitoring assistant for Ekart Logistics packages.\n\n"
+                "**2. Independent Service**\n"
+                "This bot is an independent developer utility and is **not affiliated with or endorsed by Flipkart or Ekart Logistics**.\n\n"
+                "**3. Permitted Usage**\n"
+                "Use only for tracking legitimate shipments. Automated spamming or abusing courier endpoints is strictly disallowed.\n\n"
+                "**4. As-Is Availability**\n"
+                "Tracking data is obtained from public courier interfaces without warranty of uninterrupted service."
+            ),
+            timestamp=datetime.now(timezone.utc)
+        )
+        embed.set_author(name="Ekart Logistics Tracker", icon_url=EKART_LOGO_URL)
+        view = discord.ui.View()
+        view.add_item(discord.ui.Button(label="🌐 View Online Terms", url="https://ekart-shipment-tracker.onrender.com/terms", style=discord.ButtonStyle.link))
+        await interaction.response.send_message(embed=embed, view=view)
+
+    @bot.tree.command(name="privacy", description="View Privacy Policy and data safety details")
+    async def slash_privacy(interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="🔒 Privacy Policy - Ekart Tracker",
+            color=0x10B981,
+            description=(
+                "**1. Data We Store**\n"
+                "• Public tracking numbers (e.g. `FMPP...`) that you submit.\n"
+                "• Discord Channel / DM ID to deliver your requested status updates.\n"
+                "• Optional package nickname/label that you provide.\n\n"
+                "**2. Data We NEVER Collect**\n"
+                "• No passwords, no delivery addresses, no phone numbers, no payment data.\n\n"
+                "**3. Data Control & Deletion**\n"
+                "• You can permanently delete any tracking record anytime using `/remove <id>`.\n\n"
+                "**4. Zero Third-Party Sharing**\n"
+                "• Your tracking numbers are never sold, rented, or monetized."
+            ),
+            timestamp=datetime.now(timezone.utc)
+        )
+        embed.set_author(name="Ekart Logistics Tracker", icon_url=EKART_LOGO_URL)
+        view = discord.ui.View()
+        view.add_item(discord.ui.Button(label="🌐 View Online Privacy Policy", url="https://ekart-shipment-tracker.onrender.com/privacy", style=discord.ButtonStyle.link))
+        await interaction.response.send_message(embed=embed, view=view)
 
     # ------------------ Prefix Commands ------------------
 
@@ -430,6 +479,24 @@ def setup_bot() -> commands.Bot:
         embed.set_footer(text="Ekart Tracker Server • 24/7 Monitoring")
         await ctx.send(embed=embed)
 
+    @bot.command(name="terms")
+    async def cmd_terms(ctx: commands.Context):
+        embed = discord.Embed(
+            title="📜 Terms of Service - Ekart Tracker",
+            color=0x3B82F6,
+            description="View full Terms of Service online: https://ekart-shipment-tracker.onrender.com/terms"
+        )
+        await ctx.send(embed=embed)
+
+    @bot.command(name="privacy")
+    async def cmd_privacy(ctx: commands.Context):
+        embed = discord.Embed(
+            title="🔒 Privacy Policy - Ekart Tracker",
+            color=0x10B981,
+            description="View full Privacy Policy online: https://ekart-shipment-tracker.onrender.com/privacy"
+        )
+        await ctx.send(embed=embed)
+
     @bot.command(name="help")
     async def cmd_help(ctx: commands.Context):
         p = config.discord_prefix
@@ -441,7 +508,10 @@ def setup_bot() -> commands.Bot:
             f"• `{p}simulate <id>` - Advance milestone for simulated package\n"
             f"• `{p}remove <id>` - Remove package from tracking\n"
             f"• `{p}notifytest` - Send a sample alert embed to this channel\n"
-            f"\n*Slash commands (`/track`, `/status`, `/list`, etc.) are also enabled.*"
+            f"• `{p}stats` - View tracker system metrics\n"
+            f"• `{p}terms` - View Terms of Service\n"
+            f"• `{p}privacy` - View Privacy Policy\n"
+            f"\n*Slash commands (`/track`, `/status`, `/list`, `/terms`, `/privacy`) are also active.*"
         )
         await ctx.send(text)
 
