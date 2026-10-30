@@ -19,6 +19,9 @@ This document provides a comprehensive audit of all improvements made to the **E
 | **Timezone Precision** | Indian Standard Time (`IST` - UTC+05:30) across entire system | Matches actual courier timings in India; eliminates 5.5-hour GMT offset. |
 | **Web Dashboard** | Responsive Web Status Page on Root URL (`/`) & `/favicon.ico` | Prevents 404 on cloud platforms (Render); beautiful visual landing page. |
 | **Interactive Discord UX** | In-Place `Refresh` & `Toggle Alerts` Buttons + Deduplication | 1-click live updates, channel subscriptions, and clean milestone trees. |
+| **User Privacy & Isolation** | Per-User Tracking (`user_id`), Ephemeral `/list`, & Delete Shield | Ensures users only see and manage their own private packages. |
+| **Mobile Responsiveness** | Full-Width Mobile Embeds (Removed squeezing thumbnail) | Prevents text squishing and line wrapping on phone screens. |
+| **Cloud Persistence** | Dual-Mode Storage: PostgreSQL (`DATABASE_URL`) + SQLite | 100% permanent data storage in the cloud across restarts & redeploys. |
 
 ---
 

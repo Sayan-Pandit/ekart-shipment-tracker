@@ -85,6 +85,12 @@ class TrackerStorage:
                         error_message TEXT
                     );
                 """)
+                conn.commit()
+
+                # PostgreSQL native safe column migration
+                cursor.execute("ALTER TABLE shipments ADD COLUMN IF NOT EXISTS notify_target VARCHAR(100);")
+                cursor.execute("ALTER TABLE shipments ADD COLUMN IF NOT EXISTS user_id VARCHAR(100);")
+                conn.commit()
             else:
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS shipments (
@@ -114,15 +120,15 @@ class TrackerStorage:
                         error_message TEXT
                     );
                 """)
+                conn.commit()
 
-            # Safe migrations for existing databases
-            for col in ("notify_target", "user_id"):
-                try:
-                    cursor.execute(f"ALTER TABLE shipments ADD COLUMN {col} TEXT;")
-                    conn.commit()
-                except Exception:
-                    if self.is_postgres:
-                        conn.rollback()
+                # Safe migrations for existing SQLite databases
+                for col in ("notify_target", "user_id"):
+                    try:
+                        cursor.execute(f"ALTER TABLE shipments ADD COLUMN {col} TEXT;")
+                        conn.commit()
+                    except Exception:
+                        pass
 
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_shipments_active ON shipments (is_active, last_checked_at);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_shipments_user ON shipments (user_id, is_active);")
