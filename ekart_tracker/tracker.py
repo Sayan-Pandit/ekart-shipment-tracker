@@ -2,11 +2,12 @@ import re
 import json
 import time
 import logging
-from datetime import datetime
-from typing import Optional, Dict, Any, List
+from datetime import datetime, timezone
+from typing import Optional, Dict, Any, List, Tuple
 import requests
 
-from .models import ShipmentDetails, Milestone, ShipmentStatus
+from .models import ShipmentDetails, Milestone, ShipmentStatus, sanitize_tracking_id
+from .config import config
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ class EkartLiveClient:
        - Content-Type: application/json
        - Origin: https://ekartlogistics.com
        - Referer: https://ekartlogistics.com/shipmenttrack/<trackingId>
-    6. Body: {"tracking_ids": "<id>"} or {"tracking_ids": ["<id>"]}
+    6. Body: {"tracking_ids": "<id>"} or {"tracking_ids": ["<id>", ...]}
     7. Response: {"<id>": {"shipmentTrackingDetails": [...], "expectedDeliveryDate": ...}}
     """
 
@@ -39,8 +40,9 @@ class EkartLiveClient:
     API_ENDPOINT = f"{BASE_URL}/ekartlogistics-web-routes-api/ekartlogistics-web-proxy/trackings/v2"
     DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
-    def __init__(self, timeout: int = 15):
+    def __init__(self, timeout: int = 15, cache_ttl: int = 30):
         self.timeout = timeout
+        self.cache_ttl = cache_ttl
         self.session = requests.Session()
         
         # Configure exponential backoff retry adapter
@@ -56,6 +58,7 @@ class EkartLiveClient:
 
         self.csrf_token: Optional[str] = None
         self._last_token_time: float = 0
+        self._cache: Dict[str, Tuple[float, ShipmentDetails]] = {}
 
     def refresh_csrf_token(self) -> str:
         """Fetch the Ekart homepage and parse the dynamic CSRF token & session cookies."""
@@ -72,7 +75,6 @@ class EkartLiveClient:
             # Find <meta name="csrf-token" content="..." />
             match = re.search(r'<meta\s+name=["\']csrf-token["\']\s+content=["\']([^"\']+)["\']', response.text)
             if not match:
-                # Also try reverse attribute ordering
                 match = re.search(r'<meta\s+content=["\']([^"\']+)["\']\s+name=["\']csrf-token["\']', response.text)
             
             if not match:
@@ -87,16 +89,23 @@ class EkartLiveClient:
             logger.error("Failed to fetch Ekart session and CSRF token: %s", e)
             raise EkartTrackingError(f"Could not connect to Ekart logistics portal: {e}")
 
-    def track(self, tracking_id: str, retry_on_csrf: bool = True) -> ShipmentDetails:
+    def track(self, tracking_id: str, retry_on_csrf: bool = True, use_cache: bool = True) -> ShipmentDetails:
         """
         Query the live Ekart tracking endpoint for a specific tracking ID.
+        Uses TTL cache if queried within cache_ttl seconds.
         """
-        clean_id = tracking_id.strip().upper()
-        if not clean_id:
-            raise ValueError("Tracking ID cannot be empty.")
+        clean_id = sanitize_tracking_id(tracking_id)
+
+        # Check in-memory TTL cache
+        now = time.time()
+        if use_cache and clean_id in self._cache:
+            cache_time, cached_details = self._cache[clean_id]
+            if now - cache_time < self.cache_ttl:
+                logger.debug("Returning cached tracking details for %s (TTL remaining: %.1fs)", clean_id, self.cache_ttl - (now - cache_time))
+                return cached_details
 
         # Ensure we have a valid CSRF token
-        if not self.csrf_token or (time.time() - self._last_token_time > 1800):
+        if not self.csrf_token or (now - self._last_token_time > 1800):
             self.refresh_csrf_token()
 
         headers = {
@@ -124,25 +133,69 @@ class EkartLiveClient:
                 if retry_on_csrf:
                     logger.info("CSRF token expired on Ekart server, refreshing and retrying...")
                     self.refresh_csrf_token()
-                    return self.track(clean_id, retry_on_csrf=False)
+                    return self.track(clean_id, retry_on_csrf=False, use_cache=use_cache)
                 else:
                     raise EkartTrackingError("Persistent CSRF validation failure from Ekart server.")
 
             resp.raise_for_status()
             data = resp.json()
-            return self._parse_response(clean_id, data)
+            details = self._parse_response(clean_id, data)
+            self._cache[clean_id] = (now, details)
+            return details
 
         except requests.exceptions.RequestException as e:
             logger.error("Network error during Ekart tracking request: %s", e)
             raise EkartTrackingError(f"Network error querying Ekart server: {e}")
 
+    def track_batch(self, tracking_ids: List[str]) -> Dict[str, ShipmentDetails]:
+        """
+        Query Ekart v2 API for multiple tracking IDs in a single HTTP request.
+        """
+        if not tracking_ids:
+            return {}
+
+        clean_ids = [sanitize_tracking_id(tid) for tid in tracking_ids]
+        now = time.time()
+
+        if not self.csrf_token or (now - self._last_token_time > 1800):
+            self.refresh_csrf_token()
+
+        headers = {
+            "User-Agent": self.DEFAULT_UA,
+            "X-User-Agent": f"{self.DEFAULT_UA} EKCL/website/1",
+            "Accept": "application/json, text/plain, */*",
+            "Content-Type": "application/json",
+            "csrf-token": self.csrf_token or "",
+            "Origin": self.BASE_URL,
+            "Referer": f"{self.BASE_URL}/"
+        }
+
+        payload = {"tracking_ids": clean_ids}
+
+        try:
+            resp = self.session.post(self.API_ENDPOINT, json=payload, headers=headers, timeout=self.timeout)
+            if resp.status_code == 205 or "EBADCSRFTOKEN" in resp.text:
+                self.refresh_csrf_token()
+                headers["csrf-token"] = self.csrf_token or ""
+                resp = self.session.post(self.API_ENDPOINT, json=payload, headers=headers, timeout=self.timeout)
+
+            resp.raise_for_status()
+            data = resp.json()
+            results = {}
+            for cid in clean_ids:
+                d = self._parse_response(cid, data)
+                self._cache[cid] = (now, d)
+                results[cid] = d
+            return results
+        except Exception as e:
+            logger.error("Batch tracking request failed: %s", e)
+            raise EkartTrackingError(f"Batch query failed: {e}")
+
     def _parse_response(self, tracking_id: str, data: Dict[str, Any]) -> ShipmentDetails:
         """Parse raw Ekart API JSON into a structured ShipmentDetails model."""
-        # API returns: {"<TRACKING_ID>": {...}}
         shipment_data = data.get(tracking_id)
 
         if not shipment_data or not isinstance(shipment_data, dict):
-            # Not found or empty data
             return ShipmentDetails(
                 tracking_id=tracking_id,
                 status=ShipmentStatus.UNKNOWN,
@@ -159,17 +212,14 @@ class EkartLiveClient:
         fa_shipment = bool(shipment_data.get("faShipment", False))
         reached_nearest_hub = bool(shipment_data.get("reachedNearestHub", False))
 
-        # Format expected delivery date
         expected_delivery_str = None
         if expected_raw and expected_raw > 0:
             try:
-                # Milliseconds timestamp
                 dt = datetime.fromtimestamp(expected_raw / 1000.0)
                 expected_delivery_str = dt.strftime("%Y-%m-%d %I:%M %p")
             except Exception:
                 expected_delivery_str = str(expected_raw)
 
-        # Parse milestones
         milestones: List[Milestone] = []
         is_delivered = False
 
@@ -199,12 +249,10 @@ class EkartLiveClient:
                 timestamp=raw_date
             ))
 
-        # Determine normalized overall status
         current_status = ShipmentStatus.UNKNOWN
         if is_delivered:
             current_status = ShipmentStatus.DELIVERED
         elif milestones:
-            # Last milestone status
             latest_status = milestones[-1].status_details
             current_status = ShipmentStatus.normalize(latest_status)
         elif reached_nearest_hub:
@@ -238,7 +286,6 @@ class MockEkartClient:
     ]
 
     def __init__(self):
-        # Maps tracking_id -> current stage index
         self._states: Dict[str, int] = {}
         self._last_updated: Dict[str, float] = {}
 
@@ -303,20 +350,18 @@ class ShipmentTracker:
     """
 
     def __init__(self, live_client: Optional[EkartLiveClient] = None, mock_client: Optional[MockEkartClient] = None):
-        self.live_client = live_client or EkartLiveClient()
+        self.live_client = live_client or EkartLiveClient(cache_ttl=config.cache_ttl_seconds)
         self.mock_client = mock_client or MockEkartClient()
 
-    def track(self, tracking_id: str, force_simulated: bool = False) -> ShipmentDetails:
-        """
-        Track a package. If force_simulated is True or the ID starts with 'SIM-', uses mock client.
-        Otherwise queries the live Ekart logistics server.
-        """
-        clean_id = tracking_id.strip().upper()
+    def track(self, tracking_id: str, force_simulated: bool = False, use_cache: bool = True) -> ShipmentDetails:
+        clean_id = sanitize_tracking_id(tracking_id)
         if force_simulated or clean_id.startswith("SIM-") or clean_id.startswith("DEMO-"):
             return self.mock_client.track(clean_id)
         
-        try:
-            return self.live_client.track(clean_id)
-        except Exception as e:
-            logger.warning("Live tracking query failed for %s: %s", clean_id, e)
-            raise
+        return self.live_client.track(clean_id, use_cache=use_cache)
+
+    @staticmethod
+    def get_tracking_url(tracking_id: str) -> str:
+        """Return the official web tracking URL for a package."""
+        clean = tracking_id.strip().upper()
+        return f"https://ekartlogistics.com/shipmenttrack/{clean}"

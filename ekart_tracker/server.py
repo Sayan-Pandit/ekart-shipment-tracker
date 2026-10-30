@@ -12,7 +12,7 @@ from flask_cors import CORS
 
 from .config import config
 from .storage import TrackerStorage
-from .models import ShipmentDetails, ShipmentStatus
+from .models import ShipmentDetails, ShipmentStatus, sanitize_tracking_id
 from .tracker import ShipmentTracker, EkartTrackingError
 from .notifier import DualNotificationManager
 
@@ -94,8 +94,13 @@ class TrackingServerDaemon:
                     "webhook_enabled": config.webhook_enabled,
                     "webhook_configured": self.notifier.webhook_notifier.is_configured(),
                 },
+                "configuration": config.to_safe_dict(),
                 "recent_notifications": [n.to_dict() for n in notifications]
             })
+
+        @self.app.route("/api/stats", methods=["GET"])
+        def api_stats():
+            return jsonify(self.storage.get_stats())
 
         @self.app.route("/api/shipments", methods=["GET"])
         def api_list_shipments():
@@ -106,15 +111,18 @@ class TrackingServerDaemon:
         @self.app.route("/api/shipments", methods=["POST"])
         def api_add_shipment():
             data = request.get_json(force=True, silent=True) or {}
-            tracking_id = data.get("tracking_id", "").strip().upper()
-            if not tracking_id:
-                return jsonify({"error": "tracking_id is required"}), 400
+            raw_id = data.get("tracking_id", "")
+            try:
+                tracking_id = sanitize_tracking_id(raw_id)
+            except ValueError as e:
+                return jsonify({"error": str(e)}), 400
 
             label = data.get("label", f"Package {tracking_id}")
             is_simulated = bool(data.get("is_simulated", False) or tracking_id.startswith("SIM-") or tracking_id.startswith("DEMO-"))
+            notify_target = data.get("notify_target")
 
             # Add to database
-            shipment = self.storage.add_shipment(tracking_id, label, is_simulated=is_simulated)
+            shipment = self.storage.add_shipment(tracking_id, label, is_simulated=is_simulated, notify_target=notify_target)
 
             # Perform an initial check in background or synchronously
             try:

@@ -68,6 +68,13 @@ class TestStorage(unittest.TestCase):
         self.assertEqual(logs[0].channel, "email")
         self.assertEqual(logs[0].status, "sent")
 
+    def test_get_stats(self):
+        self.storage.add_shipment("STAT1", is_simulated=True)
+        stats = self.storage.get_stats()
+        self.assertGreaterEqual(stats["total_shipments"], 1)
+        self.assertIn("active_shipments", stats)
+        self.assertIn("total_notifications", stats)
+
 if __name__ == "__main__":
     unittest.main()
 

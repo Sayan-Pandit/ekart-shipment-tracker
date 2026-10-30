@@ -72,6 +72,29 @@ class TestEkartTracker(unittest.TestCase):
         self.assertIn("SIM-ABC", sim_details.tracking_id)
         self.assertEqual(sim_details.status, "Order Created")
 
+    def test_sanitize_tracking_id(self):
+        from ekart_tracker.models import sanitize_tracking_id
+        self.assertEqual(sanitize_tracking_id("  fmpc0123  "), "FMPC0123")
+        self.assertEqual(sanitize_tracking_id("SIM-TEST_99"), "SIM-TEST_99")
+        with self.assertRaises(ValueError):
+            sanitize_tracking_id("")
+        with self.assertRaises(ValueError):
+            sanitize_tracking_id("ab") # too short
+
+    def test_progress_percentage(self):
+        from ekart_tracker.models import ShipmentDetails, ShipmentStatus
+        d = ShipmentDetails(tracking_id="TEST", status=ShipmentStatus.OUT_FOR_DELIVERY)
+        self.assertEqual(d.progress_percentage, 85)
+        self.assertFalse(d.is_terminal)
+
+        d2 = ShipmentDetails(tracking_id="TEST", status=ShipmentStatus.DELIVERED, is_delivered=True)
+        self.assertEqual(d2.progress_percentage, 100)
+        self.assertTrue(d2.is_terminal)
+
+    def test_get_tracking_url(self):
+        url = ShipmentTracker.get_tracking_url("fmpc123")
+        self.assertEqual(url, "https://ekartlogistics.com/shipmenttrack/FMPC123")
+
 if __name__ == "__main__":
     unittest.main()
 

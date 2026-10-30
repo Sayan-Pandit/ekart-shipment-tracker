@@ -16,6 +16,14 @@ logger = logging.getLogger("ekart_discord_bot")
 
 EKART_LOGO_URL = "https://static-assets-web.flixcart.com/batman-returns/batman-returns/p/images/logo_lite-cbb357.png"
 
+class ShipmentView(discord.ui.View):
+    """Interactive Discord View providing quick links to official tracking portals."""
+    def __init__(self, tracking_id: str):
+        super().__init__(timeout=None)
+        clean = tracking_id.strip().upper()
+        url = ShipmentTracker.get_tracking_url(clean)
+        self.add_item(discord.ui.Button(label="🔎 View on Ekart Portal", url=url, style=discord.ButtonStyle.link))
+
 def get_progress_bar(status: str) -> str:
     s = status.lower()
     if "delivered" in s:
@@ -125,7 +133,7 @@ def setup_bot() -> commands.Bot:
             details = tracker.track(clean_id, force_simulated=is_sim)
             storage.update_shipment_details(details)
             embed = create_discord_embed(details, event_type="Tracked", label=label)
-            await interaction.followup.send(embed=embed)
+            await interaction.followup.send(embed=embed, view=ShipmentView(clean_id))
         except Exception as e:
             await interaction.followup.send(f"⚠️ Tracking saved, but live query encountered: `{e}`")
 
@@ -143,7 +151,7 @@ def setup_bot() -> commands.Bot:
             if shipment:
                 storage.update_shipment_details(details)
             embed = create_discord_embed(details, event_type="Status", label=shipment.label if shipment else "")
-            await interaction.followup.send(embed=embed)
+            await interaction.followup.send(embed=embed, view=ShipmentView(clean_id))
         except Exception as e:
             await interaction.followup.send(f"❌ Error querying status for `{clean_id}`: `{e}`")
 
@@ -220,6 +228,19 @@ def setup_bot() -> commands.Bot:
         embed = create_discord_embed(sample, event_type="Channel Test Alert", label="Test Package")
         await interaction.response.send_message(content="✅ **Dual Notification Test - Discord Channel Alert:**", embed=embed)
 
+    @bot.tree.command(name="stats", description="View system and tracking metrics")
+    async def slash_stats(interaction: discord.Interaction):
+        stats = storage.get_stats()
+        embed = discord.Embed(title="📊 Ekart Tracker Metrics", color=0x3B82F6, timestamp=datetime.now(timezone.utc))
+        embed.set_thumbnail(url=EKART_LOGO_URL)
+        embed.add_field(name="📦 Active Shipments", value=str(stats.get("active_shipments", 0)), inline=True)
+        embed.add_field(name="✅ Total Tracked", value=str(stats.get("total_shipments", 0)), inline=True)
+        embed.add_field(name="🏁 Delivered", value=str(stats.get("delivered_shipments", 0)), inline=True)
+        embed.add_field(name="🔔 Notifications Sent", value=str(stats.get("total_notifications", 0)), inline=True)
+        embed.add_field(name="⏱️ Poll Interval", value=f"{config.poll_interval}s", inline=True)
+        embed.set_footer(text="Ekart Tracker Server • 24/7 Monitoring")
+        await interaction.response.send_message(embed=embed)
+
     @bot.tree.command(name="help", description="Show Ekart Tracker Discord Bot commands")
     async def slash_help(interaction: discord.Interaction):
         embed = discord.Embed(
@@ -247,13 +268,13 @@ def setup_bot() -> commands.Bot:
             clean_id,
             label=label or f"Package {clean_id}",
             is_simulated=is_sim,
-            notify_target=str(interaction.channel_id) if interaction.channel_id else None
+            notify_target=str(ctx.channel.id) if ctx.channel else None
         )
         try:
             details = tracker.track(clean_id, force_simulated=is_sim)
             storage.update_shipment_details(details)
             embed = create_discord_embed(details, event_type="Tracked", label=label)
-            await ctx.send(embed=embed)
+            await ctx.send(embed=embed, view=ShipmentView(clean_id))
         except Exception as e:
             await ctx.send(f"⚠️ Tracking saved, but live query encountered: `{e}`")
 
@@ -267,7 +288,9 @@ def setup_bot() -> commands.Bot:
             if shipment:
                 storage.update_shipment_details(details)
             embed = create_discord_embed(details, event_type="Status", label=shipment.label if shipment else "")
-            await ctx.send(embed=embed)
+            await ctx.send(embed=embed, view=ShipmentView(clean_id))
+        except Exception as e:
+            await ctx.send(f"❌ Error querying status for `{clean_id}`: `{e}`")
         except Exception as e:
             await ctx.send(f"❌ Error querying status for `{clean_id}`: `{e}`")
 
@@ -324,6 +347,19 @@ def setup_bot() -> commands.Bot:
         )
         embed = create_discord_embed(sample, event_type="Channel Test Alert", label="Test Package")
         await ctx.send(content="✅ **Dual Notification Test - Discord Channel Alert:**", embed=embed)
+
+    @bot.command(name="stats")
+    async def cmd_stats(ctx: commands.Context):
+        stats = storage.get_stats()
+        embed = discord.Embed(title="📊 Ekart Tracker Metrics", color=0x3B82F6, timestamp=datetime.now(timezone.utc))
+        embed.set_thumbnail(url=EKART_LOGO_URL)
+        embed.add_field(name="📦 Active Shipments", value=str(stats.get("active_shipments", 0)), inline=True)
+        embed.add_field(name="✅ Total Tracked", value=str(stats.get("total_shipments", 0)), inline=True)
+        embed.add_field(name="🏁 Delivered", value=str(stats.get("delivered_shipments", 0)), inline=True)
+        embed.add_field(name="🔔 Notifications Sent", value=str(stats.get("total_notifications", 0)), inline=True)
+        embed.add_field(name="⏱️ Poll Interval", value=f"{config.poll_interval}s", inline=True)
+        embed.set_footer(text="Ekart Tracker Server • 24/7 Monitoring")
+        await ctx.send(embed=embed)
 
     @bot.command(name="help")
     async def cmd_help(ctx: commands.Context):

@@ -24,3 +24,4 @@ services:
 volumes:
   ekart_data:
     driver: local
+

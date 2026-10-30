@@ -1,6 +1,7 @@
+import re
 import json
 from dataclasses import dataclass, field, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 
 class ShipmentStatus:
@@ -37,6 +38,38 @@ class ShipmentStatus:
             return cls.RETURNED
         return raw_status
 
+    @classmethod
+    def get_progress_percentage(cls, status: str) -> int:
+        norm = cls.normalize(status)
+        mapping = {
+            cls.ORDER_CREATED: 15,
+            cls.PICKED_UP: 30,
+            cls.IN_TRANSIT: 50,
+            cls.REACHED_HUB: 70,
+            cls.OUT_FOR_DELIVERY: 85,
+            cls.DELIVERED: 100,
+            cls.FAILED_ATTEMPT: 85,
+            cls.RETURNED: 100,
+            cls.UNKNOWN: 5,
+        }
+        return mapping.get(norm, 10)
+
+    @classmethod
+    def is_terminal_status(cls, status: str) -> bool:
+        norm = cls.normalize(status)
+        return norm in (cls.DELIVERED, cls.RETURNED)
+
+def sanitize_tracking_id(tracking_id: str) -> str:
+    """Sanitize and validate an Ekart tracking ID (e.g. FMPC0279658213, OD1234, SIM-101)."""
+    if not tracking_id or not isinstance(tracking_id, str):
+        raise ValueError("Tracking ID cannot be empty.")
+    clean = tracking_id.strip().upper()
+    # Remove any dangerous characters, only alphanumeric, hyphen, underscore allowed
+    clean = re.sub(r'[^A-Z0-9\-_]', '', clean)
+    if len(clean) < 3 or len(clean) > 40:
+        raise ValueError(f"Invalid tracking ID length ({len(clean)} chars). Must be between 3 and 40 characters.")
+    return clean
+
 @dataclass
 class Milestone:
     date_str: str
@@ -69,12 +102,22 @@ class ShipmentDetails:
     milestones: List[Milestone] = field(default_factory=list)
     raw_data: Optional[Dict[str, Any]] = None
 
+    @property
+    def progress_percentage(self) -> int:
+        return ShipmentStatus.get_progress_percentage(self.status)
+
+    @property
+    def is_terminal(self) -> bool:
+        return self.is_delivered or ShipmentStatus.is_terminal_status(self.status)
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "tracking_id": self.tracking_id,
             "status": self.status,
+            "progress_percentage": self.progress_percentage,
             "expected_delivery_date": self.expected_delivery_date,
             "is_delivered": self.is_delivered,
+            "is_terminal": self.is_terminal,
             "fa_shipment": self.fa_shipment,
             "reached_nearest_hub": self.reached_nearest_hub,
             "milestones": [m.to_dict() for m in self.milestones],
@@ -109,14 +152,24 @@ class TrackedShipment:
     milestones: List[Milestone] = field(default_factory=list)
     notify_target: Optional[str] = None
 
+    @property
+    def progress_percentage(self) -> int:
+        return ShipmentStatus.get_progress_percentage(self.current_status)
+
+    @property
+    def is_terminal(self) -> bool:
+        return self.is_delivered or ShipmentStatus.is_terminal_status(self.current_status)
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "tracking_id": self.tracking_id,
             "label": self.label,
             "is_simulated": self.is_simulated,
             "current_status": self.current_status,
+            "progress_percentage": self.progress_percentage,
             "expected_delivery": self.expected_delivery,
             "is_delivered": self.is_delivered,
+            "is_terminal": self.is_terminal,
             "created_at": self.created_at,
             "last_checked_at": self.last_checked_at,
             "is_active": self.is_active,
@@ -137,4 +190,3 @@ class NotificationRecord:
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
-

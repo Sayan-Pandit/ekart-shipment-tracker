@@ -67,13 +67,52 @@ class TrackerStorage:
                 )
             """)
 
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS settings (
-                    key TEXT PRIMARY KEY,
-                    value TEXT
-                )
-            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_shipments_active ON shipments (is_active, last_checked_at)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_notifications_tid ON notifications (tracking_id, created_at)")
             conn.commit()
+        finally:
+            conn.close()
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Return system-wide statistics for monitoring and dashboards."""
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM shipments")
+            total_shipments = cursor.fetchone()[0]
+
+            cursor.execute("SELECT COUNT(*) FROM shipments WHERE is_active = 1")
+            active_shipments = cursor.fetchone()[0]
+
+            cursor.execute("SELECT COUNT(*) FROM shipments WHERE is_delivered = 1")
+            delivered_shipments = cursor.fetchone()[0]
+
+            cursor.execute("SELECT COUNT(*) FROM shipments WHERE is_simulated = 1")
+            simulated_shipments = cursor.fetchone()[0]
+
+            cursor.execute("SELECT COUNT(*) FROM notifications")
+            total_notifications = cursor.fetchone()[0]
+
+            return {
+                "total_shipments": total_shipments,
+                "active_shipments": active_shipments,
+                "delivered_shipments": delivered_shipments,
+                "simulated_shipments": simulated_shipments,
+                "total_notifications": total_notifications
+            }
+        finally:
+            conn.close()
+
+    def cleanup_old_notifications(self, days: int = 30) -> int:
+        """Prune notifications older than N days."""
+        from datetime import datetime, timedelta
+        cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM notifications WHERE created_at < ?", (cutoff,))
+            conn.commit()
+            return cursor.rowcount
         finally:
             conn.close()
 

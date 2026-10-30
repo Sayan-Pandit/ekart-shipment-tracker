@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from dataclasses import dataclass, field
+from typing import Dict, Any
 from dotenv import load_dotenv
 
 # Automatically load .env if present
@@ -11,12 +12,14 @@ DEFAULT_DATA_DIR = BASE_DIR / "data"
 
 @dataclass
 class TrackerConfig:
-    # Server
+    # Server settings
     host: str = field(default_factory=lambda: os.getenv("SERVER_HOST", "0.0.0.0" if os.getenv("RENDER") or os.getenv("PORT") else "127.0.0.1"))
     port: int = field(default_factory=lambda: int(os.getenv("PORT", os.getenv("SERVER_PORT", "5050"))))
-    poll_interval: int = field(default_factory=lambda: int(os.getenv("POLL_INTERVAL_SECONDS", "120")))
+    poll_interval: int = field(default_factory=lambda: max(15, int(os.getenv("POLL_INTERVAL_SECONDS", "120"))))
+    cache_ttl_seconds: int = field(default_factory=lambda: int(os.getenv("CACHE_TTL_SECONDS", "30")))
+    log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO").upper())
     
-    # Notifications: Both channels
+    # Notifications: Channel 1 (Email via SMTP)
     email_enabled: bool = field(default_factory=lambda: os.getenv("NOTIFY_EMAIL_ENABLED", "true").lower() in ("true", "1", "yes"))
     smtp_host: str = field(default_factory=lambda: os.getenv("SMTP_HOST", "smtp.gmail.com"))
     smtp_port: int = field(default_factory=lambda: int(os.getenv("SMTP_PORT", "587")))
@@ -26,7 +29,7 @@ class TrackerConfig:
     email_from: str = field(default_factory=lambda: os.getenv("EMAIL_FROM", "Ekart Tracker <notifications@ekarttracker.local>"))
     email_to: str = field(default_factory=lambda: os.getenv("EMAIL_TO", ""))
     
-    # Notification Channel 2: Discord (Bot & Webhook)
+    # Notifications: Channel 2 (Discord Bot & Webhook)
     webhook_enabled: bool = field(default_factory=lambda: os.getenv("NOTIFY_WEBHOOK_ENABLED", "true").lower() in ("true", "1", "yes"))
     webhook_url: str = field(default_factory=lambda: os.getenv("WEBHOOK_URL", ""))
     
@@ -38,6 +41,7 @@ class TrackerConfig:
     discord_guild_id: str = field(default_factory=lambda: os.getenv("DISCORD_GUILD_ID", ""))
     discord_prefix: str = field(default_factory=lambda: os.getenv("DISCORD_PREFIX", "!"))
 
+    # Telegram Bot Settings (Optional fallback)
     telegram_bot_token: str = field(default_factory=lambda: os.getenv("TELEGRAM_BOT_TOKEN", ""))
     telegram_chat_id: str = field(default_factory=lambda: os.getenv("TELEGRAM_CHAT_ID", ""))
     
@@ -53,5 +57,39 @@ class TrackerConfig:
     def pid_file(self) -> Path:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         return self.data_dir / "server.pid"
+
+    def to_safe_dict(self) -> Dict[str, Any]:
+        """Return configuration dictionary with sensitive credentials safely masked."""
+        def mask(val: str, prefix_len: int = 4) -> str:
+            if not val:
+                return "<not-set>"
+            if len(val) <= prefix_len:
+                return "***"
+            return f"{val[:prefix_len]}...***"
+
+        return {
+            "server": {
+                "host": self.host,
+                "port": self.port,
+                "poll_interval_seconds": self.poll_interval,
+                "cache_ttl_seconds": self.cache_ttl_seconds,
+                "log_level": self.log_level
+            },
+            "email": {
+                "enabled": self.email_enabled,
+                "smtp_host": self.smtp_host,
+                "smtp_port": self.smtp_port,
+                "smtp_user": mask(self.smtp_user, 3),
+                "is_configured": bool(self.smtp_user and self.smtp_password and self.email_to)
+            },
+            "discord": {
+                "bot_enabled": self.discord_bot_enabled,
+                "bot_token": mask(self.discord_bot_token, 6),
+                "channel_id": mask(self.discord_channel_id, 4),
+                "user_id": mask(self.discord_user_id, 4),
+                "prefix": self.discord_prefix,
+                "webhook_configured": bool(self.webhook_url)
+            }
+        }
 
 config = TrackerConfig()
