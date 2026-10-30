@@ -95,6 +95,24 @@ class TestEkartTracker(unittest.TestCase):
         url = ShipmentTracker.get_tracking_url("fmpc123")
         self.assertEqual(url, "https://ekartlogistics.com/shipmenttrack/FMPC123")
 
+    def test_ist_timestamp_formatting(self):
+        from ekart_tracker.config import from_timestamp_ist, now_ist
+        # Timestamp for 2023-11-01 00:00:00 UTC = 2023-11-01 05:30:00 IST
+        utc_epoch_ms = 1698796800000
+        dt_ist = from_timestamp_ist(utc_epoch_ms)
+        self.assertEqual(dt_ist.strftime("%H:%M"), "05:30")
+        
+        # Test now_ist has correct offset (+05:30)
+        curr = now_ist()
+        self.assertIsNotNone(curr.tzinfo)
+        self.assertEqual(curr.strftime("%z"), "+0530")
+
+        # Test Mock client produces IST timestamps
+        mock = MockEkartClient()
+        details = mock.track("SIM-IST-01")
+        self.assertTrue(any("IST" in m.time_str for m in details.milestones))
+        self.assertIn("IST", details.expected_delivery_date)
+
 if __name__ == "__main__":
     unittest.main()
 

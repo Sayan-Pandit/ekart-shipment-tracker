@@ -21,6 +21,7 @@ from rich.live import Live
 from rich import box
 
 from .models import TrackedShipment, Milestone, NotificationRecord, ShipmentDetails
+from .config import now_ist
 
 console = Console(force_terminal=True, legacy_windows=False)
 
@@ -99,7 +100,7 @@ def render_shipments_table(shipments: List[TrackedShipment]) -> Table:
         if s.last_checked_at:
             try:
                 dt = datetime.fromisoformat(s.last_checked_at)
-                last_chk = dt.strftime("%H:%M:%S")
+                last_chk = dt.strftime("%I:%M:%S %p IST")
             except Exception:
                 last_chk = s.last_checked_at[:19]
 

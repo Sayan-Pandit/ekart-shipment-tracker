@@ -48,6 +48,9 @@ class TrackerConfig:
     # Storage
     data_dir: Path = field(default_factory=lambda: Path(os.getenv("STORAGE_DIR", str(DEFAULT_DATA_DIR))))
     
+    # Timezone settings (Default: Asia/Kolkata / IST - Indian Standard Time)
+    timezone_name: str = field(default_factory=lambda: os.getenv("TIMEZONE", "Asia/Kolkata"))
+    
     @property
     def db_path(self) -> Path:
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -93,3 +96,30 @@ class TrackerConfig:
         }
 
 config = TrackerConfig()
+
+# Timezone resolution (Default: Indian Standard Time - Asia/Kolkata / UTC+05:30)
+try:
+    from zoneinfo import ZoneInfo
+    APP_TIMEZONE = ZoneInfo(config.timezone_name)
+except Exception:
+    from datetime import timezone, timedelta
+    APP_TIMEZONE = timezone(timedelta(hours=5, minutes=30), name="IST")
+
+def now_ist() -> datetime:
+    """Return the current time in IST (Indian Standard Time)."""
+    from datetime import datetime
+    return datetime.now(APP_TIMEZONE)
+
+def from_timestamp_ist(ts_ms: float) -> datetime:
+    """Convert millisecond timestamp to IST datetime."""
+    from datetime import datetime
+    return datetime.fromtimestamp(ts_ms / 1000.0, tz=APP_TIMEZONE)
+
+def format_datetime_ist(dt: datetime, fmt: str = "%b %d, %Y %I:%M %p IST") -> str:
+    """Format any datetime object into an IST string."""
+    if dt.tzinfo is None:
+        # Assume local/naive is already IST or localize it
+        dt = dt.replace(tzinfo=APP_TIMEZONE)
+    else:
+        dt = dt.astimezone(APP_TIMEZONE)
+    return dt.strftime(fmt)

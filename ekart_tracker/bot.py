@@ -7,7 +7,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 
-from .config import config
+from .config import config, now_ist
 from .storage import TrackerStorage
 from .models import ShipmentDetails, Milestone, ShipmentStatus
 from .tracker import ShipmentTracker, EkartTrackingError
@@ -80,7 +80,7 @@ def create_discord_embed(details: ShipmentDetails, event_type: str = "Update", l
     else:
         embed.add_field(name="🚚 Recent Activity Timeline", value="*No tracking milestones available yet.*", inline=False)
 
-    embed.set_footer(text="Ekart Tracker Server Daemon • Real-time Notification")
+    embed.set_footer(text=f"Ekart Tracker Server • Real-time Alert ({now_ist().strftime('%I:%M %p IST')})")
     return embed
 
 

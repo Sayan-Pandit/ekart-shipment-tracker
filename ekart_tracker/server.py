@@ -7,10 +7,10 @@ import logging
 from datetime import datetime
 from typing import Optional, Dict, Any
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 
-from .config import config
+from .config import config, now_ist, format_datetime_ist
 from .storage import TrackerStorage
 from .models import ShipmentDetails, ShipmentStatus, sanitize_tracking_id
 from .tracker import ShipmentTracker, EkartTrackingError
@@ -44,7 +44,7 @@ class TrackingServerDaemon:
         self.app = Flask("ekart_tracker_server")
         CORS(self.app)
         
-        self.start_time = datetime.now()
+        self.start_time = now_ist()
         self.is_running = False
         self._stop_event = threading.Event()
         self._poll_thread: Optional[threading.Thread] = None
@@ -54,21 +54,96 @@ class TrackingServerDaemon:
     def _setup_routes(self) -> None:
         """Register REST API endpoints."""
 
-        @self.app.route("/", methods=["GET"])
+        @self.app.route("/favicon.ico", methods=["GET", "HEAD"])
+        def favicon():
+            return Response(status=204)
+
+        @self.app.route("/", methods=["GET", "HEAD"])
         def api_root():
-            uptime_seconds = int((datetime.now() - self.start_time).total_seconds())
+            uptime_seconds = int((now_ist() - self.start_time).total_seconds())
             shipments_count = len(self.storage.list_shipments(active_only=True))
+            server_time_ist = format_datetime_ist(now_ist())
+            
+            accept = request.headers.get("Accept", "")
+            if "text/html" in accept and "application/json" not in accept:
+                html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ekart Logistics Tracker & Discord Bot</title>
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 40px 20px; display: flex; justify-content: center; }}
+    .container {{ max-width: 680px; width: 100%; background: #1e293b; border-radius: 16px; padding: 32px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); border: 1px solid #334155; }}
+    .badge {{ display: inline-flex; align-items: center; gap: 6px; background: #064e3b; color: #34d399; padding: 4px 12px; border-radius: 9999px; font-size: 13px; font-weight: 600; }}
+    .dot {{ width: 8px; height: 8px; background: #10b981; border-radius: 50%; display: inline-block; animation: pulse 2s infinite; }}
+    @keyframes pulse {{ 0%, 100% {{ opacity: 1; }} 50% {{ opacity: 0.4; }} }}
+    h1 {{ margin: 16px 0 6px; font-size: 24px; color: #ffffff; }}
+    p.sub {{ margin: 0 0 24px; color: #94a3b8; font-size: 14px; }}
+    .grid {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin: 24px 0; }}
+    .card {{ background: #0f172a; border-radius: 10px; padding: 16px; border: 1px solid #334155; }}
+    .card-label {{ color: #94a3b8; font-size: 12px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; }}
+    .card-val {{ font-size: 20px; font-weight: 700; color: #38bdf8; margin-top: 6px; }}
+    .links {{ display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }}
+    .btn {{ background: #3b82f6; color: white; padding: 8px 16px; border-radius: 8px; text-decoration: none; font-size: 13px; font-weight: 500; transition: background 0.2s; }}
+    .btn:hover {{ background: #2563eb; }}
+    .footer {{ margin-top: 32px; padding-top: 16px; border-top: 1px solid #334155; font-size: 12px; color: #64748b; text-align: center; }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="badge"><span class="dot"></span> SYSTEM ONLINE</div>
+    <h1>Ekart Shipment Tracker & Discord Bot</h1>
+    <p class="sub">Production Logistics Tracking Daemon & Notification Service</p>
+
+    <div class="grid">
+      <div class="card">
+        <div class="card-label">Server Timezone</div>
+        <div class="card-val" style="font-size: 16px; color: #f59e0b;">IST (Asia/Kolkata)</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Current IST Time</div>
+        <div class="card-val" style="font-size: 14px; color: #34d399;">{server_time_ist}</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Active Shipments</div>
+        <div class="card-val">{shipments_count}</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Discord Bot</div>
+        <div class="card-val" style="font-size: 16px; color: {'#10b981' if config.discord_bot_token else '#ef4444'};">{'Active' if config.discord_bot_token else 'Token Not Set'}</div>
+      </div>
+    </div>
+
+    <div class="links">
+      <a class="btn" href="/health">Health Check</a>
+      <a class="btn" href="/api/status">System Status (JSON)</a>
+      <a class="btn" href="/api/shipments">Active Shipments</a>
+      <a class="btn" href="/api/stats">Database Stats</a>
+    </div>
+
+    <div class="footer">
+      Running on Render Cloud &bull; Timezone: IST (UTC+05:30) &bull; Uptime: {uptime_seconds}s
+    </div>
+  </div>
+</body>
+</html>"""
+                return Response(html, mimetype="text/html")
+
             return jsonify({
                 "service": "Ekart Logistics Shipment Tracker & Discord Bot",
                 "status": "online",
                 "version": "1.0.0",
+                "timezone": config.timezone_name,
+                "current_time_ist": server_time_ist,
                 "uptime_seconds": uptime_seconds,
                 "active_shipments": shipments_count,
                 "endpoints": {
                     "health": "/health",
                     "status": "/api/status",
                     "shipments": "/api/shipments",
-                    "notifications": "/api/notifications"
+                    "notifications": "/api/notifications",
+                    "stats": "/api/stats"
                 },
                 "discord_bot": {
                     "enabled": config.discord_bot_enabled,
@@ -79,11 +154,13 @@ class TrackingServerDaemon:
         @self.app.route("/health", methods=["GET"])
         @self.app.route("/api/status", methods=["GET"])
         def api_status():
-            uptime_seconds = (datetime.now() - self.start_time).total_seconds()
+            uptime_seconds = (now_ist() - self.start_time).total_seconds()
             shipments = self.storage.list_shipments(active_only=True)
             notifications = self.storage.list_notifications(limit=5)
             return jsonify({
                 "status": "online",
+                "timezone": config.timezone_name,
+                "current_time_ist": format_datetime_ist(now_ist()),
                 "uptime_seconds": int(uptime_seconds),
                 "started_at": self.start_time.isoformat(),
                 "active_shipments_count": len(shipments),

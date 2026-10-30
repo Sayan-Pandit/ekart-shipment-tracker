@@ -7,7 +7,7 @@ from typing import Dict, Any, Optional, Tuple
 from datetime import datetime, timezone
 import requests
 
-from .config import config
+from .config import config, now_ist
 from .models import NotificationRecord, ShipmentDetails, Milestone
 
 logger = logging.getLogger(__name__)
@@ -153,7 +153,7 @@ class EmailNotifier:
               </table>
             </div>
             <div class="footer">
-              Automated alert by Ekart Shipment Tracker Server &bull; {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+              Automated alert by Ekart Shipment Tracker Server &bull; {now_ist().strftime('%Y-%m-%d %I:%M:%S %p IST')}
             </div>
           </div>
         </body>
@@ -252,7 +252,7 @@ class WebhookNotifier:
                     {"name": "Delivered", "value": "✅ YES" if details.is_delivered else "⏳ In Progress", "inline": True},
                     {"name": "Recent Milestones", "value": timeline_text, "inline": False}
                 ],
-                "footer": {"text": "Ekart Shipment Tracker • Automated Alert"},
+                "footer": {"text": f"Ekart Shipment Tracker • Automated Alert ({now_ist().strftime('%I:%M %p IST')})"},
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }]
         }
@@ -315,7 +315,7 @@ class WebhookNotifier:
                 "is_delivered": details.is_delivered,
                 "reached_nearest_hub": details.reached_nearest_hub,
                 "milestones": [m.to_dict() for m in details.milestones],
-                "timestamp": datetime.now().isoformat()
+                "timestamp": now_ist().isoformat()
             }
 
         try:

@@ -12,6 +12,8 @@ services:
     environment:
       - SERVER_HOST=0.0.0.0
       - SERVER_PORT=5050
+      - TZ=Asia/Kolkata
+      - TIMEZONE=Asia/Kolkata
       - POLL_INTERVAL_SECONDS=120
       - NOTIFY_EMAIL_ENABLED=true
       - NOTIFY_WEBHOOK_ENABLED=true

@@ -16,6 +16,8 @@ This document provides a comprehensive audit of all improvements made to the **E
 | **Code Modernization** | Timezone-Aware UTC Standard (`datetime.now(timezone.utc)`) | Removes Python 3.12+ deprecation warnings; ensures accurate timekeeping. |
 | **Cloud & DevOps** | Production Dockerfile, Docker Compose & GitHub Actions CI | 1-command portable deployment and automated testing across Python versions. |
 | **Observability** | Centralized System Metrics (`/api/stats` and `!stats`) | Fast real-time insight into active packages, delivery counts, and alerts. |
+| **Timezone Precision** | Indian Standard Time (`IST` - UTC+05:30) across entire system | Matches actual courier timings in India; eliminates 5.5-hour GMT offset. |
+| **Web Dashboard** | Responsive Web Status Page on Root URL (`/`) & `/favicon.ico` | Prevents 404 on cloud platforms (Render); beautiful visual landing page. |
 
 ---
 
@@ -107,13 +109,43 @@ This document provides a comprehensive audit of all improvements made to the **E
 
 ---
 
+### 8. Indian Standard Time (IST - UTC+05:30) Conversion
+* **Files Modified**: [`ekart_tracker/config.py`](file:///d:/Shipment%20Tracker/ekart_tracker/config.py), [`ekart_tracker/tracker.py`](file:///d:/Shipment%20Tracker/ekart_tracker/tracker.py), [`ekart_tracker/storage.py`](file:///d:/Shipment%20Tracker/ekart_tracker/storage.py), [`ekart_tracker/notifier.py`](file:///d:/Shipment%20Tracker/ekart_tracker/notifier.py), [`ekart_tracker/bot.py`](file:///d:/Shipment%20Tracker/ekart_tracker/bot.py), [`ekart_tracker/tui.py`](file:///d:/Shipment%20Tracker/ekart_tracker/tui.py), [`render.yaml`](file:///d:/Shipment%20Tracker/render.yaml), [`docker-compose.yml`](file:///d:/Shipment%20Tracker/docker-compose.yml), [`Dockerfile`](file:///d:/Shipment%20Tracker/Dockerfile)
+* **What was done**:
+  * Introduced unified IST time helpers in `config.py`:
+    * `now_ist()`: Current time localized to `Asia/Kolkata` (UTC+05:30).
+    * `from_timestamp_ist(ts_ms)`: Converts Ekart Unix epoch milliseconds to IST datetime.
+    * `format_datetime_ist(dt)`: Formats dates into human-readable IST strings (e.g. `Oct 30, 2026 10:55 PM IST`).
+  * Updated `tracker.py` to convert all shipment milestones and expected delivery dates into IST with explicit `IST` labels.
+  * Updated `storage.py` and `notifier.py` to record database logs, email footers, and Discord bot alerts with IST timestamps.
+  * Configured `TZ=Asia/Kolkata` and `TIMEZONE=Asia/Kolkata` across `render.yaml`, `Dockerfile`, and `docker-compose.yml`.
+* **Why it was done**:
+  * Cloud hosts (like Render Linux instances) default to UTC/GMT. This created a 5 hour and 30 minute discrepancy between the actual time of package movements in India and the displayed time in alerts and tables.
+  * Converting everything to IST ensures accurate tracking that matches Indian courier timelines.
+
+---
+
+### 9. Web Status Dashboard & Cloud Root Routing
+* **Files Modified**: [`ekart_tracker/server.py`](file:///d:/Shipment%20Tracker/ekart_tracker/server.py)
+* **What was done**:
+  * Implemented content negotiation on `/`:
+    * When opened in a web browser (e.g. Chrome on Render's primary URL `https://ekart-shipment-tracker.onrender.com`), renders a sleek, responsive HTML status page displaying server status, timezone, active packages, Discord bot status, and quick API links.
+    * When accessed via API or curl, returns a clean JSON summary.
+  * Added `@app.route("/favicon.ico")` returning `204 No Content` to prevent 404 errors in production logs.
+* **Why it was done**:
+  * Cloud services like Render ping `/` or direct users to the base URL. Previously, visiting `/` in a browser or before routes were registered could produce a `404 Not Found`.
+  * The web dashboard provides a professional, informative landing page for visitors and server monitors.
+
+---
+
 ## 🧪 Verification & Test Coverage
 
-The automated test suite in [`tests/`](file:///d:/Shipment%20Tracker/tests) has been expanded from 17 to **21 comprehensive unit tests**:
+The automated test suite in [`tests/`](file:///d:/Shipment%20Tracker/tests) has been expanded from 17 to **22 comprehensive unit tests**:
 
 * `test_tracker.py`:
   * Tests CSRF token parsing from live HTML meta tags.
   * Tests response serialization into `ShipmentDetails` and `Milestone`.
+  * Tests IST timestamp parsing, epoch conversion, and offset verification (`+0530`).
   * Tests input sanitization (`sanitize_tracking_id`).
   * Tests progress percentage and terminal state calculations.
   * Tests official web portal link generation.
@@ -133,8 +165,9 @@ The automated test suite in [`tests/`](file:///d:/Shipment%20Tracker/tests) has 
   * Tests shipment creation and validation.
   * Tests simulation advancement.
 
-All 21 tests pass in under 2 seconds:
+All 22 tests pass in under 2 seconds:
 ```bash
 python -m unittest discover -s tests
-# Result: Ran 21 tests in 1.758s -> OK
+# Result: Ran 22 tests in 1.910s -> OK
 ```
+

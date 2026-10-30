@@ -7,6 +7,10 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
+      - key: TZ
+        value: Asia/Kolkata
+      - key: TIMEZONE
+        value: Asia/Kolkata
       - key: NOTIFY_EMAIL_ENABLED
         value: "true"
       - key: NOTIFY_WEBHOOK_ENABLED

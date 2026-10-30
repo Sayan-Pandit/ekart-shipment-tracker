@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 from .models import TrackedShipment, Milestone, NotificationRecord, ShipmentDetails
-from .config import config
+from .config import config, now_ist
 
 logger = logging.getLogger(__name__)
 
@@ -105,8 +105,8 @@ class TrackerStorage:
 
     def cleanup_old_notifications(self, days: int = 30) -> int:
         """Prune notifications older than N days."""
-        from datetime import datetime, timedelta
-        cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+        from datetime import timedelta
+        cutoff = (now_ist() - timedelta(days=days)).isoformat()
         conn = self._get_connection()
         try:
             cursor = conn.cursor()
@@ -118,7 +118,7 @@ class TrackerStorage:
 
     def add_shipment(self, tracking_id: str, label: str = "", is_simulated: bool = False, notify_target: Optional[str] = None) -> TrackedShipment:
         clean_id = tracking_id.strip().upper()
-        now_str = datetime.now().isoformat()
+        now_str = now_ist().isoformat()
         conn = self._get_connection()
         try:
             cursor = conn.cursor()
@@ -176,7 +176,7 @@ class TrackerStorage:
             conn.close()
 
     def update_shipment_details(self, details: ShipmentDetails) -> None:
-        now_str = datetime.now().isoformat()
+        now_str = now_ist().isoformat()
         milestones_json = json.dumps([m.to_dict() for m in details.milestones])
         conn = self._get_connection()
         try:
@@ -224,7 +224,7 @@ class TrackerStorage:
             conn.close()
 
     def log_notification(self, record: NotificationRecord) -> int:
-        now_str = record.created_at or datetime.now().isoformat()
+        now_str = record.created_at or now_ist().isoformat()
         conn = self._get_connection()
         try:
             cursor = conn.cursor()

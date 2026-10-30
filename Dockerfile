@@ -2,7 +2,9 @@
 FROM python:3.11-slim AS base
 
 # Prevent Python from writing .pyc files and enable unbuffered logging
-ENV PYTHONDONTWRITEBYTECODE=1 \
+ENV TZ=Asia/Kolkata \
+    TIMEZONE=Asia/Kolkata \
+    PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app
 

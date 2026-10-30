@@ -7,7 +7,7 @@ from typing import Optional, Dict, Any, List, Tuple
 import requests
 
 from .models import ShipmentDetails, Milestone, ShipmentStatus, sanitize_tracking_id
-from .config import config
+from .config import config, now_ist, from_timestamp_ist, format_datetime_ist
 
 logger = logging.getLogger(__name__)
 
@@ -215,8 +215,8 @@ class EkartLiveClient:
         expected_delivery_str = None
         if expected_raw and expected_raw > 0:
             try:
-                dt = datetime.fromtimestamp(expected_raw / 1000.0)
-                expected_delivery_str = dt.strftime("%Y-%m-%d %I:%M %p")
+                dt = from_timestamp_ist(expected_raw)
+                expected_delivery_str = dt.strftime("%Y-%m-%d %I:%M %p IST")
             except Exception:
                 expected_delivery_str = str(expected_raw)
 
@@ -232,9 +232,9 @@ class EkartLiveClient:
             time_str = ""
             if raw_date and raw_date > 0:
                 try:
-                    dt = datetime.fromtimestamp(raw_date / 1000.0)
+                    dt = from_timestamp_ist(raw_date)
                     date_str = dt.strftime("%b %d, %Y")
-                    time_str = dt.strftime("%I:%M %p")
+                    time_str = dt.strftime("%I:%M %p IST")
                 except Exception:
                     pass
 
@@ -320,17 +320,17 @@ class MockEkartClient:
         for i in range(stage_idx + 1):
             s_name, s_desc, s_city, s_deliv = self.SIMULATED_STAGES[i]
             m_time = base_time + (i * 3600 * 1000)
-            dt = datetime.fromtimestamp(m_time / 1000.0)
+            dt = from_timestamp_ist(m_time)
             milestones.append(Milestone(
                 date_str=dt.strftime("%b %d, %Y"),
-                time_str=dt.strftime("%I:%M %p"),
+                time_str=dt.strftime("%I:%M %p IST"),
                 city=s_city,
                 status_details=f"{s_name} - {s_desc}",
                 timestamp=m_time
             ))
 
-        expected_dt = datetime.fromtimestamp(time.time() + 86400)
-        expected_str = expected_dt.strftime("%Y-%m-%d %I:%M %p")
+        expected_dt = from_timestamp_ist((time.time() + 86400) * 1000)
+        expected_str = expected_dt.strftime("%Y-%m-%d %I:%M %p IST")
 
         return ShipmentDetails(
             tracking_id=tracking_id,
