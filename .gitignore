@@ -1,0 +1,23 @@
+# Environment variables & secrets (CRITICAL)
+.env
+*.env.local
+
+# Database & Runtime logs
+data/
+*.db
+*.log
+*.pid
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

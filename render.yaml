@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: ekart-shipment-tracker
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python run.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: NOTIFY_EMAIL_ENABLED
+        value: "true"
+      - key: NOTIFY_WEBHOOK_ENABLED
+        value: "true"
+      - key: DISCORD_BOT_ENABLED
+        value: "true"
+      - key: POLL_INTERVAL_SECONDS
+        value: "120"
+      # Fill these in the Render Dashboard under Environment:
+      # - key: DISCORD_BOT_TOKEN
+      #   sync: false
+      # - key: DISCORD_USER_ID
+      #   sync: false
+      # - key: DISCORD_CHANNEL_ID
+      #   sync: false
+
