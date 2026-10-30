@@ -155,42 +155,66 @@ This document provides a comprehensive audit of all improvements made to the **E
     * Instant at-a-glance hub/facility name (`📍 Current Location: Uluberia`).
   * **Discord Native Dynamic Countdown**:
     * Uses `<t:{epoch}:D>` and `<t:{epoch}:R>` for estimated delivery so Discord dynamically counts down (e.g. `in 2 days`) without line-wrapping truncation.
-* **Why it was done**:
-  * Elevates the Discord Bot experience to production-grade quality, providing instant user controls, clean aesthetics, and zero visual clutter.
+
+### 11. Dual Storage Engine (SQLite & Cloud PostgreSQL)
+* **Files Modified**: [`ekart_tracker/storage.py`](file:///d:/Shipment%20Tracker/ekart_tracker/storage.py), [`ekart_tracker/config.py`](file:///d:/Shipment%20Tracker/ekart_tracker/config.py)
+* **What was done**:
+  * Added auto-detection of `DATABASE_URL` for managed PostgreSQL instances (e.g., Render PostgreSQL, Supabase).
+  * Seamless SQL placeholder translation (`?` to `%s`) across all queries.
+  * Schema initialization with safe migrations (`ALTER TABLE ... ADD COLUMN IF NOT EXISTS`).
+  * Per-user data isolation and private `/list` filtering.
+
+### 12. Security Hardening, Bug Fixes & Code Quality Audit
+* **Files Modified**: [`ekart_tracker/bot.py`](file:///d:/Shipment%20Tracker/ekart_tracker/bot.py), [`ekart_tracker/models.py`](file:///d:/Shipment%20Tracker/ekart_tracker/models.py), [`ekart_tracker/tracker.py`](file:///d:/Shipment%20Tracker/ekart_tracker/tracker.py), [`ekart_tracker/notifier.py`](file:///d:/Shipment%20Tracker/ekart_tracker/notifier.py), [`ekart_tracker/server.py`](file:///d:/Shipment%20Tracker/ekart_tracker/server.py), [`ekart_tracker/cli.py`](file:///d:/Shipment%20Tracker/ekart_tracker/cli.py), [`setup.py`](file:///d:/Shipment%20Tracker/setup.py)
+* **What was done**:
+  * **Fixed Bug C1**: Removed dead code referencing undefined variables in `/simulate`.
+  * **Fixed Bug C2**: Removed orphaned `interaction.response.send_message` in `/stats` that caused `InteractionResponded` crash.
+  * **Fixed Bug C3**: Re-ordered status normalization so `"Out for Delivery"` and `"Undelivered"` are not misclassified as `"Delivered"`.
+  * **Fixed Bug C4**: Replaced raw SQL in `ShipmentView.btn_toggle_alerts` with storage method `update_notify_target()` supporting both SQLite and PostgreSQL.
+  * **Non-blocking Discord Bot**: Wrapped synchronous `tracker.track()` calls with `asyncio.to_thread()` to prevent event loop stalls.
+  * **Memory Leak Prevention**: Bounded tracking in-memory cache to 500 entries with automatic expired entry eviction.
+  * **Email XSS Protection**: Added `html.escape()` sanitization to all dynamic milestone fields rendered in HTML emails.
+  * **Input Sanitization**: Applied `sanitize_tracking_id()` to all Discord slash and prefix commands.
+  * **Dynamic Year Stripping**: Formatted milestone timelines using dynamic `now_ist().year` instead of hardcoded `"2026"`.
+  * **Dependency Synchronization**: Synced `setup.py` with `requirements.txt` (`discord.py`, `psycopg2-binary`, `urllib3`, `gunicorn`).
+  * **Cleaned Dead Imports**: Removed unused imports across modules.
 
 ---
 
 ## 🧪 Verification & Test Coverage
 
-The automated test suite in [`tests/`](file:///d:/Shipment%20Tracker/tests) has been expanded from 17 to **23 comprehensive unit tests**:
+The automated test suite in [`tests/`](file:///d:/Shipment%20Tracker/tests) contains **27 comprehensive unit tests**:
 
-* `test_tracker.py`:
+* `test_tracker.py` (10 tests):
   * Tests CSRF token parsing from live HTML meta tags.
   * Tests response serialization into `ShipmentDetails` and `Milestone`.
   * Tests milestone deduplication and `current_location` extraction.
   * Tests IST timestamp parsing, epoch conversion, and offset verification (`+0530`).
   * Tests input sanitization (`sanitize_tracking_id`).
+  * Tests status normalization ordering ("Out for Delivery" and "Undelivered" vs "Delivered").
   * Tests progress percentage and terminal state calculations.
   * Tests official web portal link generation.
-* `test_storage.py`:
+* `test_storage.py` (7 tests):
   * Tests SQLite CRUD operations.
-  * Tests `notify_target` persistence.
+  * Tests `notify_target` persistence and `update_notify_target()`.
   * Tests `get_stats()` metrics aggregator.
   * Tests notification logging and queries.
-* `test_notifier.py`:
-  * Tests HTML email template rendering.
+  * Tests per-user isolation and delete protection.
+* `test_notifier.py` (4 tests):
+  * Tests HTML email template rendering with HTML escaping.
   * Tests plain text rendering.
   * Tests dry-run notification dispatching.
   * Tests dual-channel orchestration.
-* `test_server.py`:
+* `test_server.py` (5 tests):
   * Tests `/health` and `/` endpoints.
   * Tests masked configuration output on `/api/status`.
   * Tests shipment creation and validation.
   * Tests simulation advancement.
+  * Tests terms and privacy policy endpoints.
 
-All 22 tests pass in under 2 seconds:
+All 27 tests pass in ~2 seconds:
 ```bash
 python -m unittest discover -s tests
-# Result: Ran 22 tests in 1.910s -> OK
+# Result: Ran 27 tests in 2.091s -> OK
 ```
 

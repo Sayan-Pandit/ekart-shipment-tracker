@@ -1,6 +1,5 @@
 import unittest
 import re
-from unittest.mock import patch, MagicMock
 from ekart_tracker.tracker import EkartLiveClient, MockEkartClient, ShipmentTracker
 from ekart_tracker.models import ShipmentStatus
 
@@ -129,6 +128,21 @@ class TestEkartTracker(unittest.TestCase):
         self.assertEqual(details.deduplicated_milestones[0].city, "Nadia")
         self.assertEqual(details.deduplicated_milestones[1].city, "Uluberia")
         self.assertEqual(details.current_location, "Uluberia")
+
+    def test_status_normalization_ordering(self):
+        # Ensure Out for Delivery does not match Delivered
+        self.assertEqual(ShipmentStatus.normalize("Out for Delivery"), ShipmentStatus.OUT_FOR_DELIVERY)
+        self.assertEqual(ShipmentStatus.normalize("Package is out for delivery today"), ShipmentStatus.OUT_FOR_DELIVERY)
+        self.assertEqual(ShipmentStatus.get_progress_percentage("Out for Delivery"), 85)
+
+        # Ensure Undelivered matches FAILED_ATTEMPT and not Delivered
+        self.assertEqual(ShipmentStatus.normalize("Undelivered - Customer unavailable"), ShipmentStatus.FAILED_ATTEMPT)
+        self.assertEqual(ShipmentStatus.normalize("Delivery failed"), ShipmentStatus.FAILED_ATTEMPT)
+
+        # Ensure Delivered matches correctly
+        self.assertEqual(ShipmentStatus.normalize("Delivered to recipient"), ShipmentStatus.DELIVERED)
+        self.assertEqual(ShipmentStatus.normalize("Shipment Delivered"), ShipmentStatus.DELIVERED)
+        self.assertEqual(ShipmentStatus.get_progress_percentage("Delivered"), 100)
 
 if __name__ == "__main__":
     unittest.main()

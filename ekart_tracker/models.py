@@ -1,7 +1,5 @@
 import re
-import json
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 
 class ShipmentStatus:
@@ -20,10 +18,12 @@ class ShipmentStatus:
         if not raw_status:
             return cls.UNKNOWN
         s = raw_status.strip().lower()
-        if "delivered" in s:
-            return cls.DELIVERED
-        elif "out for delivery" in s:
+        if "out for delivery" in s:
             return cls.OUT_FOR_DELIVERY
+        elif "undelivered" in s or "failed" in s:
+            return cls.FAILED_ATTEMPT
+        elif "delivered" in s:
+            return cls.DELIVERED
         elif "nearest hub" in s or "at hub" in s or "reached facility" in s or "received at facility" in s:
             return cls.REACHED_HUB
         elif "in transit" in s or "dispatched" in s or "bagged" in s or "shipped" in s:
@@ -32,8 +32,6 @@ class ShipmentStatus:
             return cls.PICKED_UP
         elif "order created" in s or "manifest" in s:
             return cls.ORDER_CREATED
-        elif "failed" in s or "undelivered" in s:
-            return cls.FAILED_ATTEMPT
         elif "return" in s or "cancelled" in s:
             return cls.RETURNED
         return raw_status

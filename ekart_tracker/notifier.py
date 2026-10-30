@@ -1,5 +1,5 @@
 import smtplib
-import json
+import html
 import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -97,13 +97,20 @@ class EmailNotifier:
 
         milestone_rows = ""
         for m in reversed(details.milestones[-6:]):
+            time_escaped = html.escape(f"{m.date_str} {m.time_str}")
+            city_escaped = html.escape(m.city)
+            details_escaped = html.escape(m.status_details)
             milestone_rows += f"""
             <tr style="border-bottom: 1px solid #e5e7eb;">
-                <td style="padding: 10px 12px; font-size: 13px; color: #4b5563;">{m.date_str} {m.time_str}</td>
-                <td style="padding: 10px 12px; font-size: 13px; font-weight: 600; color: #111827;">{m.city}</td>
-                <td style="padding: 10px 12px; font-size: 13px; color: #374151;">{m.status_details}</td>
+                <td style="padding: 10px 12px; font-size: 13px; color: #4b5563;">{time_escaped}</td>
+                <td style="padding: 10px 12px; font-size: 13px; font-weight: 600; color: #111827;">{city_escaped}</td>
+                <td style="padding: 10px 12px; font-size: 13px; color: #374151;">{details_escaped}</td>
             </tr>
             """
+
+        clean_status = html.escape(details.status)
+        clean_tid = html.escape(details.tracking_id)
+        clean_eta = html.escape(details.expected_delivery_date) if details.expected_delivery_date else "To be announced"
 
         return f"""
         <!DOCTYPE html>
@@ -130,11 +137,11 @@ class EmailNotifier:
             </div>
             <div class="content">
               <div style="text-align: center; margin-bottom: 20px;">
-                <span class="badge">{details.status}</span>
-                <h3 style="margin: 12px 0 4px; font-size: 18px; color: #111827;">Tracking ID: {details.tracking_id}</h3>
+                <span class="badge">{clean_status}</span>
+                <h3 style="margin: 12px 0 4px; font-size: 18px; color: #111827;">Tracking ID: {clean_tid}</h3>
               </div>
               <div class="info-box">
-                <p style="margin: 4px 0;"><strong>Estimated Delivery:</strong> {details.expected_delivery_date or 'To be announced'}</p>
+                <p style="margin: 4px 0;"><strong>Estimated Delivery:</strong> {clean_eta}</p>
                 <p style="margin: 4px 0;"><strong>Delivered:</strong> {'✅ Yes' if details.is_delivered else '⏳ In Progress'}</p>
                 <p style="margin: 4px 0;"><strong>Nearest Hub:</strong> {'Reached' if details.reached_nearest_hub else 'In Transit'}</p>
               </div>

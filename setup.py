@@ -13,13 +13,17 @@ setup(
         "rich>=13.0.0",
         "click>=8.0.0",
         "python-dotenv>=1.0.0",
-        "colorama>=0.4.6"
+        "colorama>=0.4.6",
+        "discord.py>=2.3.0",
+        "urllib3>=2.0.0",
+        "psycopg2-binary>=2.9.9",
+        "gunicorn>=21.2.0"
     ],
     entry_points={
         "console_scripts": [
             "ekart-tracker=ekart_tracker.cli:cli",
         ],
     },
-    python_requires=">=3.8",
+    python_requires=">=3.10",
 )
 

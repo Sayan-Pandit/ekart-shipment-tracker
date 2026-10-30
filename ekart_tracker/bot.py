@@ -9,7 +9,7 @@ from discord import app_commands
 
 from .config import config, now_ist
 from .storage import TrackerStorage
-from .models import ShipmentDetails, Milestone, ShipmentStatus
+from .models import ShipmentDetails, Milestone, ShipmentStatus, sanitize_tracking_id
 from .tracker import ShipmentTracker, EkartTrackingError
 
 logger = logging.getLogger("ekart_discord_bot")
@@ -35,7 +35,7 @@ class ShipmentView(discord.ui.View):
         try:
             shipment = self.storage.get_shipment(self.tracking_id)
             is_sim = shipment.is_simulated if shipment else (self.tracking_id.startswith("SIM-") or self.tracking_id.startswith("DEMO-"))
-            details = self.tracker.track(self.tracking_id, force_simulated=is_sim, use_cache=False)
+            details = await asyncio.to_thread(self.tracker.track, self.tracking_id, force_simulated=is_sim, use_cache=False)
             if shipment:
                 self.storage.update_shipment_details(details)
             label = self.label or (shipment.label if shipment else "")
@@ -59,20 +59,10 @@ class ShipmentView(discord.ui.View):
             return
 
         if shipment.notify_target == channel_id:
-            conn = self.storage._get_connection()
-            try:
-                conn.execute("UPDATE shipments SET notify_target = NULL WHERE tracking_id = ?", (self.tracking_id,))
-                conn.commit()
-            finally:
-                conn.close()
+            self.storage.update_notify_target(self.tracking_id, None)
             await interaction.response.send_message(f"🔕 **Alerts Muted:** Notifications for `{self.tracking_id}` turned off in this channel.", ephemeral=True)
         else:
-            conn = self.storage._get_connection()
-            try:
-                conn.execute("UPDATE shipments SET notify_target = ? WHERE tracking_id = ?", (channel_id, self.tracking_id))
-                conn.commit()
-            finally:
-                conn.close()
+            self.storage.update_notify_target(self.tracking_id, channel_id)
             await interaction.response.send_message(f"🔔 **Subscribed!** Notifications for `{self.tracking_id}` will now route to this channel.", ephemeral=True)
 
 def get_progress_bar(status: str) -> str:
@@ -134,10 +124,11 @@ def create_discord_embed(details: ShipmentDetails, event_type: str = "Status", l
     milestones = details.deduplicated_milestones
     if milestones:
         timeline_entries = []
+        curr_year = str(now_ist().year)
         for idx, m in enumerate(reversed(milestones[-5:])):
             prefix = "🟢" if idx == 0 else "•"
             city_str = f"({m.city})" if m.city and m.city != "N/A" else ""
-            d_str = m.date_str.replace(", 2026", "").replace(" 2026", "").strip()
+            d_str = m.date_str.replace(f", {curr_year}", "").replace(f" {curr_year}", "").strip()
             t_str = m.time_str.replace(" IST", "").strip()
             time_display = f"{d_str}, {t_str}" if d_str else t_str
             header = f"{prefix} **{time_display}** {city_str}"
@@ -187,7 +178,11 @@ def setup_bot() -> commands.Bot:
     )
     async def slash_track(interaction: discord.Interaction, tracking_id: str, label: str = "", simulate: bool = False):
         await interaction.response.defer(thinking=True)
-        clean_id = tracking_id.strip().upper()
+        try:
+            clean_id = sanitize_tracking_id(tracking_id)
+        except ValueError as ve:
+            await interaction.followup.send(f"❌ Invalid tracking ID: {ve}")
+            return
         is_sim = simulate or clean_id.startswith("SIM-") or clean_id.startswith("DEMO-")
 
         try:
@@ -199,7 +194,7 @@ def setup_bot() -> commands.Bot:
                 notify_target=str(interaction.channel_id) if interaction.channel_id else None,
                 user_id=user_id
             )
-            details = tracker.track(clean_id, force_simulated=is_sim)
+            details = await asyncio.to_thread(tracker.track, clean_id, force_simulated=is_sim)
             storage.update_shipment_details(details)
             embed = create_discord_embed(details, event_type="Tracked", label=label)
             await interaction.followup.send(embed=embed, view=ShipmentView(clean_id, label=label, storage=storage, tracker=tracker))
@@ -211,12 +206,16 @@ def setup_bot() -> commands.Bot:
     @app_commands.describe(tracking_id="The Ekart Tracking ID to check")
     async def slash_status(interaction: discord.Interaction, tracking_id: str):
         await interaction.response.defer(thinking=True)
-        clean_id = tracking_id.strip().upper()
+        try:
+            clean_id = sanitize_tracking_id(tracking_id)
+        except ValueError as ve:
+            await interaction.followup.send(f"❌ Invalid tracking ID: {ve}")
+            return
 
         try:
             shipment = storage.get_shipment(clean_id)
             is_sim = shipment.is_simulated if shipment else (clean_id.startswith("SIM-") or clean_id.startswith("DEMO-"))
-            details = tracker.track(clean_id, force_simulated=is_sim)
+            details = await asyncio.to_thread(tracker.track, clean_id, force_simulated=is_sim)
             if shipment:
                 storage.update_shipment_details(details)
             embed = create_discord_embed(details, event_type="Status", label=shipment.label if shipment else "")
@@ -261,7 +260,11 @@ def setup_bot() -> commands.Bot:
     @app_commands.describe(tracking_id="Tracking ID to remove")
     async def slash_remove(interaction: discord.Interaction, tracking_id: str):
         await interaction.response.defer(ephemeral=True, thinking=True)
-        clean_id = tracking_id.strip().upper()
+        try:
+            clean_id = sanitize_tracking_id(tracking_id)
+        except ValueError as ve:
+            await interaction.followup.send(f"❌ Invalid tracking ID: {ve}", ephemeral=True)
+            return
         try:
             user_id = str(interaction.user.id)
             shipment = storage.get_shipment(clean_id)
@@ -283,7 +286,11 @@ def setup_bot() -> commands.Bot:
     @app_commands.describe(tracking_id="Tracking ID to advance (e.g. SIM-LAPTOP)")
     async def slash_simulate(interaction: discord.Interaction, tracking_id: str):
         await interaction.response.defer(thinking=True)
-        clean_id = tracking_id.strip().upper()
+        try:
+            clean_id = sanitize_tracking_id(tracking_id)
+        except ValueError as ve:
+            await interaction.followup.send(f"❌ Invalid tracking ID: {ve}")
+            return
 
         try:
             shipment = storage.get_shipment(clean_id)
@@ -306,22 +313,6 @@ def setup_bot() -> commands.Bot:
             logger.error("Error in slash_simulate: %s", e, exc_info=True)
             await interaction.followup.send(f"❌ Error advancing simulation: `{e}`")
 
-    @bot.tree.command(name="notifytest", description="Send a test notification embed to verify Discord channel alerts")
-    async def slash_notify_test(interaction: discord.Interaction):
-        sample = ShipmentDetails(
-            tracking_id="TEST_FMPC999",
-            status="Out for Delivery",
-            expected_delivery_date=datetime.now().strftime("%Y-%m-%d 08:00 PM"),
-            is_delivered=False,
-            reached_nearest_hub=True,
-            milestones=[
-                Milestone(date_str="Oct 30, 2026", time_str="10:00 AM", city="Mumbai Hub", status_details="Item Bagged and Dispatched"),
-                Milestone(date_str="Oct 30, 2026", time_str="03:00 PM", city="Bengaluru Hub", status_details="Out for Delivery with agent")
-            ]
-        )
-        embed = create_discord_embed(sample, event_type="Channel Test Alert", label="Test Package")
-        await interaction.response.send_message(content="✅ **Dual Notification Test - Discord Channel Alert:**", embed=embed)
-
     @bot.tree.command(name="stats", description="View system and tracking metrics")
     async def slash_stats(interaction: discord.Interaction):
         await interaction.response.defer(thinking=True)
@@ -339,7 +330,6 @@ def setup_bot() -> commands.Bot:
         except Exception as e:
             logger.error("Error in slash_stats: %s", e, exc_info=True)
             await interaction.followup.send(f"❌ Error retrieving stats: `{e}`")
-        await interaction.response.send_message(embed=embed)
 
     @bot.tree.command(name="help", description="Show Ekart Tracker Discord Bot commands")
     async def slash_help(interaction: discord.Interaction):
@@ -411,7 +401,12 @@ def setup_bot() -> commands.Bot:
 
     @bot.command(name="track", aliases=["add"])
     async def cmd_track(ctx: commands.Context, tracking_id: str, *, label: str = ""):
-        clean_id = tracking_id.strip().upper()
+        try:
+            clean_id = sanitize_tracking_id(tracking_id)
+        except ValueError as ve:
+            await ctx.send(f"❌ Invalid tracking ID: {ve}")
+            return
+
         is_sim = clean_id.startswith("SIM-") or clean_id.startswith("DEMO-")
         user_id = str(ctx.author.id)
         storage.add_shipment(
@@ -422,7 +417,7 @@ def setup_bot() -> commands.Bot:
             user_id=user_id
         )
         try:
-            details = tracker.track(clean_id, force_simulated=is_sim)
+            details = await asyncio.to_thread(tracker.track, clean_id, force_simulated=is_sim)
             storage.update_shipment_details(details)
             embed = create_discord_embed(details, event_type="Tracked", label=label)
             await ctx.send(embed=embed, view=ShipmentView(clean_id, label=label, storage=storage, tracker=tracker))
@@ -431,11 +426,16 @@ def setup_bot() -> commands.Bot:
 
     @bot.command(name="status", aliases=["info"])
     async def cmd_status(ctx: commands.Context, tracking_id: str):
-        clean_id = tracking_id.strip().upper()
+        try:
+            clean_id = sanitize_tracking_id(tracking_id)
+        except ValueError as ve:
+            await ctx.send(f"❌ Invalid tracking ID: {ve}")
+            return
+
         shipment = storage.get_shipment(clean_id)
         is_sim = shipment.is_simulated if shipment else (clean_id.startswith("SIM-") or clean_id.startswith("DEMO-"))
         try:
-            details = tracker.track(clean_id, force_simulated=is_sim)
+            details = await asyncio.to_thread(tracker.track, clean_id, force_simulated=is_sim)
             if shipment:
                 storage.update_shipment_details(details)
             embed = create_discord_embed(details, event_type="Status", label=shipment.label if shipment else "")
@@ -461,7 +461,12 @@ def setup_bot() -> commands.Bot:
 
     @bot.command(name="simulate")
     async def cmd_simulate(ctx: commands.Context, tracking_id: str):
-        clean_id = tracking_id.strip().upper()
+        try:
+            clean_id = sanitize_tracking_id(tracking_id)
+        except ValueError as ve:
+            await ctx.send(f"❌ Invalid tracking ID: {ve}")
+            return
+
         shipment = storage.get_shipment(clean_id)
         if not shipment:
             shipment = storage.add_shipment(clean_id, "Simulated Package", is_simulated=True, user_id=str(ctx.author.id))
@@ -481,7 +486,12 @@ def setup_bot() -> commands.Bot:
 
     @bot.command(name="remove", aliases=["delete"])
     async def cmd_remove(ctx: commands.Context, tracking_id: str):
-        clean_id = tracking_id.strip().upper()
+        try:
+            clean_id = sanitize_tracking_id(tracking_id)
+        except ValueError as ve:
+            await ctx.send(f"❌ Invalid tracking ID: {ve}")
+            return
+
         user_id = str(ctx.author.id)
         shipment = storage.get_shipment(clean_id)
         if not shipment:

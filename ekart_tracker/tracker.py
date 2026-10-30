@@ -1,13 +1,11 @@
 import re
-import json
 import time
 import logging
-from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List, Tuple
 import requests
 
 from .models import ShipmentDetails, Milestone, ShipmentStatus, sanitize_tracking_id
-from .config import config, now_ist, from_timestamp_ist, format_datetime_ist
+from .config import config, now_ist, from_timestamp_ist
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +37,7 @@ class EkartLiveClient:
     BASE_URL = "https://ekartlogistics.com"
     API_ENDPOINT = f"{BASE_URL}/ekartlogistics-web-routes-api/ekartlogistics-web-proxy/trackings/v2"
     DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    CSRF_TOKEN_TTL_SECONDS = 1800
 
     def __init__(self, timeout: int = 15, cache_ttl: int = 30):
         self.timeout = timeout
@@ -59,6 +58,18 @@ class EkartLiveClient:
         self.csrf_token: Optional[str] = None
         self._last_token_time: float = 0
         self._cache: Dict[str, Tuple[float, ShipmentDetails]] = {}
+
+    def _save_to_cache(self, clean_id: str, details: ShipmentDetails) -> None:
+        """Store tracking details in cache with bounded eviction to prevent memory leaks."""
+        now = time.time()
+        if len(self._cache) >= 500:
+            # Evict expired entries first
+            self._cache = {k: v for k, v in self._cache.items() if now - v[0] < self.cache_ttl}
+            if len(self._cache) >= 500:
+                oldest_keys = sorted(self._cache.keys(), key=lambda k: self._cache[k][0])[:250]
+                for k in oldest_keys:
+                    self._cache.pop(k, None)
+        self._cache[clean_id] = (now, details)
 
     def refresh_csrf_token(self) -> str:
         """Fetch the Ekart homepage and parse the dynamic CSRF token & session cookies."""
@@ -105,7 +116,7 @@ class EkartLiveClient:
                 return cached_details
 
         # Ensure we have a valid CSRF token
-        if not self.csrf_token or (now - self._last_token_time > 1800):
+        if not self.csrf_token or (now - self._last_token_time > self.CSRF_TOKEN_TTL_SECONDS):
             self.refresh_csrf_token()
 
         headers = {
@@ -140,7 +151,7 @@ class EkartLiveClient:
             resp.raise_for_status()
             data = resp.json()
             details = self._parse_response(clean_id, data)
-            self._cache[clean_id] = (now, details)
+            self._save_to_cache(clean_id, details)
             return details
 
         except requests.exceptions.RequestException as e:
@@ -157,7 +168,7 @@ class EkartLiveClient:
         clean_ids = [sanitize_tracking_id(tid) for tid in tracking_ids]
         now = time.time()
 
-        if not self.csrf_token or (now - self._last_token_time > 1800):
+        if not self.csrf_token or (now - self._last_token_time > self.CSRF_TOKEN_TTL_SECONDS):
             self.refresh_csrf_token()
 
         headers = {
@@ -184,7 +195,7 @@ class EkartLiveClient:
             results = {}
             for cid in clean_ids:
                 d = self._parse_response(cid, data)
-                self._cache[cid] = (now, d)
+                self._save_to_cache(cid, d)
                 results[cid] = d
             return results
         except Exception as e:

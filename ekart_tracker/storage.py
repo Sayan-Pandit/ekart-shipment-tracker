@@ -1,7 +1,6 @@
 import sqlite3
 import json
 import logging
-from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
@@ -271,6 +270,21 @@ class TrackerStorage:
                 details.tracking_id
             ))
             conn.commit()
+        finally:
+            conn.close()
+
+    def update_notify_target(self, tracking_id: str, notify_target: Optional[str]) -> bool:
+        """Update notification target (e.g. Discord channel ID) for a shipment."""
+        clean_id = tracking_id.strip().upper()
+        conn = self._get_connection()
+        try:
+            cursor = self._get_cursor(conn)
+            cursor.execute(
+                self._query("UPDATE shipments SET notify_target = ? WHERE tracking_id = ?"),
+                (notify_target, clean_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
         finally:
             conn.close()
 

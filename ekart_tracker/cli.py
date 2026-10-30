@@ -2,9 +2,8 @@ import os
 import sys
 import time
 import subprocess
-import signal
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 
 # Ensure terminal UTF-8 encoding support
 if hasattr(sys.stdout, "reconfigure"):
@@ -30,7 +29,7 @@ from .tui import (
     render_notifications_table
 )
 
-SERVER_BASE_URL = f"http://{config.host}:{config.port}"
+SERVER_BASE_URL = f"http://{'127.0.0.1' if config.host in ('0.0.0.0', '') else config.host}:{config.port}"
 
 def get_server_status_api() -> Optional[Dict[str, Any]]:
     """Try to reach server REST API."""

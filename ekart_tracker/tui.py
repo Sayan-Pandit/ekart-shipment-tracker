@@ -1,5 +1,4 @@
 import sys
-import time
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 
@@ -16,8 +15,6 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.text import Text
 from rich.tree import Tree
-from rich.layout import Layout
-from rich.live import Live
 from rich import box
 
 from .models import TrackedShipment, Milestone, NotificationRecord, ShipmentDetails

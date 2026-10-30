@@ -99,6 +99,22 @@ class TestStorage(unittest.TestCase):
         self.assertTrue(can_delete_own)
         self.assertIsNone(self.storage.get_shipment("PKG_USER_A"))
 
+    def test_update_notify_target(self):
+        self.storage.add_shipment("NOTIFY_TEST_01", label="Alert Item", notify_target="channel_123")
+        item = self.storage.get_shipment("NOTIFY_TEST_01")
+        self.assertEqual(item.notify_target, "channel_123")
+
+        # Update to new channel
+        updated = self.storage.update_notify_target("NOTIFY_TEST_01", "channel_456")
+        self.assertTrue(updated)
+        item = self.storage.get_shipment("NOTIFY_TEST_01")
+        self.assertEqual(item.notify_target, "channel_456")
+
+        # Mute (set to None)
+        self.storage.update_notify_target("NOTIFY_TEST_01", None)
+        item = self.storage.get_shipment("NOTIFY_TEST_01")
+        self.assertIsNone(item.notify_target)
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -1,5 +1,4 @@
 import unittest
-import json
 from ekart_tracker.server import TrackingServerDaemon
 
 class TestServerAPI(unittest.TestCase):

@@ -1,7 +1,6 @@
 import os
 import sys
 import time
-import signal
 import threading
 import logging
 from datetime import datetime
@@ -399,7 +398,10 @@ class TrackingServerDaemon:
         @self.app.route("/api/notifications", methods=["GET"])
         def api_get_notifications():
             tracking_id = request.args.get("tracking_id")
-            limit = int(request.args.get("limit", "50"))
+            try:
+                limit = max(1, min(100, int(request.args.get("limit", "50"))))
+            except (ValueError, TypeError):
+                limit = 50
             records = self.storage.list_notifications(tracking_id=tracking_id, limit=limit)
             return jsonify([r.to_dict() for r in records])
 

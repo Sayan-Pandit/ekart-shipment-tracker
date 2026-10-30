@@ -30,7 +30,7 @@ An enterprise-grade, production-ready Ekart Logistics shipment tracking platform
 │      Dual Notifications      │ │         Interfaces         │
 │  • Email (SMTP Rich HTML)    │ │  • Discord Bot (Slash & !) │
 │  • Discord Bot (DM & Channel)│ │  • Terminal CLI / TUI      │
-│  • Webhooks (Discord/Slack)  │ │  • REST API (JSON)         │
+│  • Webhooks (Discord/Telegram)│ │  • REST API (JSON)         │
 └──────────────────────────────┘ └────────────────────────────┘
 ```
 
@@ -150,4 +150,4 @@ Run the test suite across tracking, SQLite storage, notification dispatchers, an
 ```bash
 python -m unittest discover -s tests
 ```
-All 17 tests run in under 2 seconds with 100% pass rate.
+All 27 unit tests run in ~2 seconds with 100% pass rate.
