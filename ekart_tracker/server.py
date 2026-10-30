@@ -54,6 +54,28 @@ class TrackingServerDaemon:
     def _setup_routes(self) -> None:
         """Register REST API endpoints."""
 
+        @self.app.route("/", methods=["GET"])
+        def api_root():
+            uptime_seconds = int((datetime.now() - self.start_time).total_seconds())
+            shipments_count = len(self.storage.list_shipments(active_only=True))
+            return jsonify({
+                "service": "Ekart Logistics Shipment Tracker & Discord Bot",
+                "status": "online",
+                "version": "1.0.0",
+                "uptime_seconds": uptime_seconds,
+                "active_shipments": shipments_count,
+                "endpoints": {
+                    "health": "/health",
+                    "status": "/api/status",
+                    "shipments": "/api/shipments",
+                    "notifications": "/api/notifications"
+                },
+                "discord_bot": {
+                    "enabled": config.discord_bot_enabled,
+                    "connected": bool(config.discord_bot_token)
+                }
+            })
+
         @self.app.route("/health", methods=["GET"])
         @self.app.route("/api/status", methods=["GET"])
         def api_status():
