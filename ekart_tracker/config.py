@@ -46,7 +46,8 @@ class TrackerConfig:
     telegram_bot_token: str = field(default_factory=lambda: os.getenv("TELEGRAM_BOT_TOKEN", ""))
     telegram_chat_id: str = field(default_factory=lambda: os.getenv("TELEGRAM_CHAT_ID", ""))
     
-    # Storage
+    # Storage & Database
+    database_url: str = field(default_factory=lambda: os.getenv("DATABASE_URL", ""))
     data_dir: Path = field(default_factory=lambda: Path(os.getenv("STORAGE_DIR", str(DEFAULT_DATA_DIR))))
     
     # Timezone settings (Default: Asia/Kolkata / IST - Indian Standard Time)
@@ -93,6 +94,10 @@ class TrackerConfig:
                 "user_id": mask(self.discord_user_id, 4),
                 "prefix": self.discord_prefix,
                 "webhook_configured": bool(self.webhook_url)
+            },
+            "database": {
+                "engine": "PostgreSQL" if self.database_url else "SQLite",
+                "is_cloud_postgres": bool(self.database_url)
             }
         }
 
