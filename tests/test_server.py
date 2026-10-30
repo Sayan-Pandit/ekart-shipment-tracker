@@ -62,6 +62,52 @@ class TestServerAPI(unittest.TestCase):
         self.assertEqual(resp_priv.status_code, 200)
         self.assertIn(b"Privacy Policy", resp_priv.data)
 
+    def test_get_and_delete_shipment(self):
+        # Add a package
+        self.client.post("/api/shipments", json={
+            "tracking_id": "TEST_DEL_01",
+            "label": "To Be Deleted",
+            "is_simulated": True
+        })
+        # GET single
+        resp = self.client.get("/api/shipments/TEST_DEL_01")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.get_json()["tracking_id"], "TEST_DEL_01")
+
+        # DELETE
+        del_resp = self.client.delete("/api/shipments/TEST_DEL_01")
+        self.assertEqual(del_resp.status_code, 200)
+        self.assertTrue(del_resp.get_json()["success"])
+
+        # GET 404 after delete
+        not_found = self.client.get("/api/shipments/TEST_DEL_01")
+        self.assertEqual(not_found.status_code, 404)
+
+    def test_api_key_authentication(self):
+        from ekart_tracker.config import config
+        original_key = config.api_key
+        try:
+            config.api_key = "test_secret_key_123"
+            
+            # Unauthorized request (missing header)
+            unauth = self.client.post("/api/shipments", json={"tracking_id": "TEST_AUTH_01"})
+            self.assertEqual(unauth.status_code, 401)
+
+            # Authorized request with X-API-Key
+            auth_ok = self.client.post(
+                "/api/shipments",
+                json={"tracking_id": "TEST_AUTH_01", "is_simulated": True},
+                headers={"X-API-Key": "test_secret_key_123"}
+            )
+            self.assertEqual(auth_ok.status_code, 201)
+        finally:
+            config.api_key = original_key
+
+    def test_invalid_limit_query_parameter(self):
+        resp = self.client.get("/api/notifications?limit=invalid_number")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsInstance(resp.get_json(), list)
+
 if __name__ == "__main__":
     unittest.main()
 

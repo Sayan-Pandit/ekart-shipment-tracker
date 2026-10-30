@@ -42,6 +42,7 @@ class EkartLiveClient:
     def __init__(self, timeout: int = 15, cache_ttl: int = 30):
         self.timeout = timeout
         self.cache_ttl = cache_ttl
+        self.csrf_ttl = config.csrf_token_ttl_seconds
         self.session = requests.Session()
         
         # Configure exponential backoff retry adapter
@@ -116,7 +117,7 @@ class EkartLiveClient:
                 return cached_details
 
         # Ensure we have a valid CSRF token
-        if not self.csrf_token or (now - self._last_token_time > self.CSRF_TOKEN_TTL_SECONDS):
+        if not self.csrf_token or (now - self._last_token_time > self.csrf_ttl):
             self.refresh_csrf_token()
 
         headers = {
@@ -168,7 +169,7 @@ class EkartLiveClient:
         clean_ids = [sanitize_tracking_id(tid) for tid in tracking_ids]
         now = time.time()
 
-        if not self.csrf_token or (now - self._last_token_time > self.CSRF_TOKEN_TTL_SECONDS):
+        if not self.csrf_token or (now - self._last_token_time > self.csrf_ttl):
             self.refresh_csrf_token()
 
         headers = {

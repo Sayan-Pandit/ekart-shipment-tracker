@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import requests
 
 from .config import config, now_ist
-from .models import NotificationRecord, ShipmentDetails, Milestone
+from .models import NotificationRecord, ShipmentDetails, Milestone, ShipmentStatus, STATUS_HEX_COLORS
 
 logger = logging.getLogger(__name__)
 
@@ -86,14 +86,8 @@ class EmailNotifier:
         return "\n".join(lines)
 
     def _render_html(self, details: ShipmentDetails, event_type: str) -> str:
-        color_map = {
-            "Delivered": "#10B981", # Green
-            "Out for Delivery": "#F59E0B", # Orange
-            "In Transit": "#3B82F6", # Blue
-            "Reached Nearest Hub": "#6366F1", # Indigo
-            "Picked Up": "#8B5CF6", # Purple
-        }
-        badge_color = color_map.get(details.status, "#4F46E5")
+        norm = ShipmentStatus.normalize(details.status)
+        badge_color = STATUS_HEX_COLORS.get(norm, "#4F46E5")
 
         milestone_rows = ""
         for m in reversed(details.milestones[-6:]):

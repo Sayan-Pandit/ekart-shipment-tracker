@@ -41,7 +41,8 @@ class TrackingServerDaemon:
         self.notifier = DualNotificationManager(storage=self.storage)
         
         self.app = Flask("ekart_tracker_server")
-        CORS(self.app)
+        origins = [o.strip() for o in config.cors_origins.split(",") if o.strip()]
+        CORS(self.app, origins=origins if origins else "*")
         
         self.start_time = now_ist()
         self.is_running = False
@@ -52,6 +53,19 @@ class TrackingServerDaemon:
 
     def _setup_routes(self) -> None:
         """Register REST API endpoints."""
+
+        def verify_api_key():
+            """Check API key on mutating endpoints if API_KEY is set in environment."""
+            if not config.api_key:
+                return None
+            req_key = request.headers.get("X-API-Key")
+            if not req_key:
+                auth = request.headers.get("Authorization", "")
+                if auth.startswith("Bearer "):
+                    req_key = auth[7:].strip()
+            if req_key != config.api_key:
+                return jsonify({"error": "Unauthorized: invalid or missing API key"}), 401
+            return None
 
         @self.app.route("/favicon.ico", methods=["GET", "HEAD"])
         def favicon():
@@ -299,6 +313,9 @@ class TrackingServerDaemon:
 
         @self.app.route("/api/shipments", methods=["POST"])
         def api_add_shipment():
+            auth_err = verify_api_key()
+            if auth_err:
+                return auth_err
             data = request.get_json(force=True, silent=True) or {}
             raw_id = data.get("tracking_id", "")
             try:
@@ -333,6 +350,9 @@ class TrackingServerDaemon:
 
         @self.app.route("/api/shipments/<tracking_id>", methods=["DELETE"])
         def api_remove_shipment(tracking_id: str):
+            auth_err = verify_api_key()
+            if auth_err:
+                return auth_err
             clean_id = tracking_id.strip().upper()
             success = self.storage.remove_shipment(clean_id)
             if not success:
@@ -341,6 +361,9 @@ class TrackingServerDaemon:
 
         @self.app.route("/api/shipments/<tracking_id>/refresh", methods=["POST"])
         def api_refresh_shipment(tracking_id: str):
+            auth_err = verify_api_key()
+            if auth_err:
+                return auth_err
             clean_id = tracking_id.strip().upper()
             shipment = self.storage.get_shipment(clean_id)
             if not shipment:
@@ -371,6 +394,9 @@ class TrackingServerDaemon:
         @self.app.route("/api/shipments/<tracking_id>/simulate", methods=["POST"])
         def api_simulate_advance(tracking_id: str):
             """Step a simulated shipment to its next delivery stage."""
+            auth_err = verify_api_key()
+            if auth_err:
+                return auth_err
             clean_id = tracking_id.strip().upper()
             shipment = self.storage.get_shipment(clean_id)
             if not shipment:
@@ -407,6 +433,9 @@ class TrackingServerDaemon:
 
         @self.app.route("/api/notifications/test", methods=["POST"])
         def api_test_notifications():
+            auth_err = verify_api_key()
+            if auth_err:
+                return auth_err
             data = request.get_json(force=True, silent=True) or {}
             tracking_id = data.get("tracking_id", "TEST_FMPC01234567")
             results = self.notifier.send_test_notifications(tracking_id=tracking_id)
@@ -417,6 +446,9 @@ class TrackingServerDaemon:
 
         @self.app.route("/api/config", methods=["POST"])
         def api_update_config():
+            auth_err = verify_api_key()
+            if auth_err:
+                return auth_err
             data = request.get_json(force=True, silent=True) or {}
             if "poll_interval" in data:
                 config.poll_interval = max(10, int(data["poll_interval"]))

@@ -3,7 +3,8 @@
 [![CI Test Suite](https://github.com/Sayan-Pandit/ekart-shipment-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/Sayan-Pandit/ekart-shipment-tracker/actions/workflows/ci.yml)
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](Dockerfile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/)
+[![Documentation](https://img.shields.io/badge/docs-system_architecture-orange.svg)](docs/SYSTEM_DOCUMENTATION.md)
 
 An enterprise-grade, production-ready Ekart Logistics shipment tracking platform featuring a **multi-threaded background server daemon**, **dual-channel automated notifications** (Email via SMTP + Discord via Bot & Webhook), a **Discord Bot with slash commands**, and a **rich terminal interface**.
 

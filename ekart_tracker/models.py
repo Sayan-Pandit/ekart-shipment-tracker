@@ -57,6 +57,29 @@ class ShipmentStatus:
         norm = cls.normalize(status)
         return norm in (cls.DELIVERED, cls.RETURNED)
 
+# Canonical status colors for Discord embeds, email badges, and terminal styling
+STATUS_HEX_COLORS = {
+    ShipmentStatus.DELIVERED: "#10B981",       # Green
+    ShipmentStatus.OUT_FOR_DELIVERY: "#F59E0B", # Amber / Gold
+    ShipmentStatus.REACHED_HUB: "#6366F1",      # Indigo
+    ShipmentStatus.IN_TRANSIT: "#3B82F6",       # Blue
+    ShipmentStatus.PICKED_UP: "#8B5CF6",        # Purple
+    ShipmentStatus.ORDER_CREATED: "#0EA5E9",    # Cyan
+    ShipmentStatus.FAILED_ATTEMPT: "#EF4444",   # Red
+    ShipmentStatus.RETURNED: "#6B7280",         # Gray
+}
+
+STATUS_INT_COLORS = {
+    ShipmentStatus.DELIVERED: 0x10B981,
+    ShipmentStatus.OUT_FOR_DELIVERY: 0xF59E0B,
+    ShipmentStatus.REACHED_HUB: 0x6366F1,
+    ShipmentStatus.IN_TRANSIT: 0x3B82F6,
+    ShipmentStatus.PICKED_UP: 0x8B5CF6,
+    ShipmentStatus.ORDER_CREATED: 0x0EA5E9,
+    ShipmentStatus.FAILED_ATTEMPT: 0xEF4444,
+    ShipmentStatus.RETURNED: 0x6B7280,
+}
+
 def sanitize_tracking_id(tracking_id: str) -> str:
     """Sanitize and validate an Ekart tracking ID (e.g. FMPC0279658213, OD1234, SIM-101)."""
     if not tracking_id or not isinstance(tracking_id, str):

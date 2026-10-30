@@ -9,7 +9,7 @@ from discord import app_commands
 
 from .config import config, now_ist
 from .storage import TrackerStorage
-from .models import ShipmentDetails, Milestone, ShipmentStatus, sanitize_tracking_id
+from .models import ShipmentDetails, Milestone, ShipmentStatus, sanitize_tracking_id, STATUS_INT_COLORS
 from .tracker import ShipmentTracker, EkartTrackingError
 
 logger = logging.getLogger("ekart_discord_bot")
@@ -73,24 +73,21 @@ def get_progress_bar(status: str) -> str:
     return f"`[{bar}]` **{pct}%** ({norm})"
 
 def create_discord_embed(details: ShipmentDetails, event_type: str = "Status", label: str = "") -> discord.Embed:
+    norm_status = ShipmentStatus.normalize(details.status)
+    color = STATUS_INT_COLORS.get(norm_status, 0x0EA5E9)
+
     status_lower = details.status.lower()
     if "delivered" in status_lower:
-        color = 0x10B981 # Green
         status_icon = "🏁"
     elif "out for delivery" in status_lower:
-        color = 0xF59E0B # Gold / Amber
         status_icon = "🚚"
     elif "nearest hub" in status_lower:
-        color = 0x6366F1 # Indigo
         status_icon = "📍"
     elif "in transit" in status_lower:
-        color = 0x3B82F6 # Blue
         status_icon = "🚛"
     elif "picked up" in status_lower:
-        color = 0x8B5CF6 # Purple
         status_icon = "📦"
     else:
-        color = 0x0EA5E9 # Cyan
         status_icon = "📦"
 
     title = f"📦 Ekart: {details.tracking_id}"

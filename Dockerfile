@@ -1,5 +1,5 @@
 # Production Dockerfile for Ekart Shipment Tracker & Discord Bot
-FROM python:3.11-slim AS base
+FROM python:3.11-slim
 
 # Prevent Python from writing .pyc files and enable unbuffered logging
 ENV TZ=Asia/Kolkata \

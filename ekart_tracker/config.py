@@ -18,6 +18,9 @@ class TrackerConfig:
     port: int = field(default_factory=lambda: int(os.getenv("PORT", os.getenv("SERVER_PORT", "5050"))))
     poll_interval: int = field(default_factory=lambda: max(15, int(os.getenv("POLL_INTERVAL_SECONDS", "120"))))
     cache_ttl_seconds: int = field(default_factory=lambda: int(os.getenv("CACHE_TTL_SECONDS", "30")))
+    csrf_token_ttl_seconds: int = field(default_factory=lambda: int(os.getenv("CSRF_TOKEN_TTL_SECONDS", "1800")))
+    api_key: str = field(default_factory=lambda: os.getenv("API_KEY", ""))
+    cors_origins: str = field(default_factory=lambda: os.getenv("CORS_ORIGINS", "*"))
     log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO").upper())
     
     # Notifications: Channel 1 (Email via SMTP)

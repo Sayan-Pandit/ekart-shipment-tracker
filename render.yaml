@@ -2,6 +2,8 @@ services:
   - type: web
     name: ekart-shipment-tracker
     runtime: python
+    plan: free
+    healthCheckPath: /health
     buildCommand: pip install -r requirements.txt
     startCommand: python run.py
     envVars:

@@ -12,4 +12,11 @@ tests/__pycache__
 .idea
 Dockerfile
 docker-compose.yml
+render.yaml
+Procfile
+*.egg-info/
+IMPROVEMENTS.md
+README.md
+docs/
+
 
