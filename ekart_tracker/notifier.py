@@ -4,7 +4,7 @@ import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Dict, Any, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 import requests
 
 from .config import config
@@ -253,7 +253,7 @@ class WebhookNotifier:
                     {"name": "Recent Milestones", "value": timeline_text, "inline": False}
                 ],
                 "footer": {"text": "Ekart Shipment Tracker • Automated Alert"},
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }]
         }
 
@@ -302,7 +302,7 @@ class WebhookNotifier:
                         {"name": "Delivered", "value": "✅ Yes" if details.is_delivered else "⏳ No", "inline": True},
                         {"name": "Latest Update", "value": details.milestones[-1].status_details if details.milestones else "Pending", "inline": False}
                     ],
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 }]
             }
         else:

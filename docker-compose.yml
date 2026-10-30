@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  ekart-tracker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ekart-tracker
+    restart: unless-stopped
+    ports:
+      - "5050:5050"
+    environment:
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=5050
+      - POLL_INTERVAL_SECONDS=120
+      - NOTIFY_EMAIL_ENABLED=true
+      - NOTIFY_WEBHOOK_ENABLED=true
+      - DISCORD_BOT_ENABLED=true
+    env_file:
+      - .env
+    volumes:
+      - ekart_data:/app/data
+
+volumes:
+  ekart_data:
+    driver: local

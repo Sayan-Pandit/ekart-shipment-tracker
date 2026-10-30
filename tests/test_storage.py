@@ -15,14 +15,16 @@ class TestStorage(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_add_and_get_shipment(self):
-        s = self.storage.add_shipment("FMPC12345", label="Test Order", is_simulated=True)
+        s = self.storage.add_shipment("FMPC12345", label="Test Order", is_simulated=True, notify_target="channel:123456789")
         self.assertEqual(s.tracking_id, "FMPC12345")
         self.assertEqual(s.label, "Test Order")
         self.assertTrue(s.is_simulated)
+        self.assertEqual(s.notify_target, "channel:123456789")
 
         fetched = self.storage.get_shipment("FMPC12345")
         self.assertIsNotNone(fetched)
         self.assertEqual(fetched.tracking_id, "FMPC12345")
+        self.assertEqual(fetched.notify_target, "channel:123456789")
 
     def test_update_shipment_details(self):
         self.storage.add_shipment("FMPC12345")

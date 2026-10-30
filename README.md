@@ -1,202 +1,153 @@
 # 📦 Ekart Shipment Tracker & Discord Bot
 
-An enterprise-grade Ekart Logistics package tracker featuring a **background server daemon**, **dual-channel notifications** (Email + Discord Bot / Webhook), and an interactive **rich terminal interface**.
+[![CI Test Suite](https://github.com/Sayan-Pandit/ekart-shipment-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/Sayan-Pandit/ekart-shipment-tracker/actions/workflows/ci.yml)
+[![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](Dockerfile)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
+
+An enterprise-grade, production-ready Ekart Logistics shipment tracking platform featuring a **multi-threaded background server daemon**, **dual-channel automated notifications** (Email via SMTP + Discord via Bot & Webhook), a **Discord Bot with slash commands**, and a **rich terminal interface**.
 
 ---
 
-## 🔍 Tracking Mechanism Inspection
+## 🏗️ Architecture & Core Components
 
-The Ekart Logistics tracking mechanism was reverse-engineered by inspecting the modern web application bundle on `https://ekartlogistics.com`:
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Ekart Logistics Network                │
+│                 (Reverse-Engineered v2 Scraper)             │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ (Polling Every 120s)
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 Ekart Tracker Server Daemon                 │
+│   • Multi-Threaded Polling Scheduler                        │
+│   • REST API Engine (Flask / Gunicorn)                      │
+│   • SQLite Concurrency (WAL Mode + Thread-Safe Connection)  │
+└──────────────┬──────────────────────────────┬───────────────┘
+               │                              │
+               ▼ (Status Changed)             ▼ (Commands & Queries)
+┌──────────────────────────────┐ ┌────────────────────────────┐
+│      Dual Notifications      │ │         Interfaces         │
+│  • Email (SMTP Rich HTML)    │ │  • Discord Bot (Slash & !) │
+│  • Discord Bot (DM & Channel)│ │  • Terminal CLI / TUI      │
+│  • Webhooks (Discord/Slack)  │ │  • REST API (JSON)         │
+└──────────────────────────────┘ └────────────────────────────┘
+```
 
-1. **CSRF & Session Bootstrap**:
-   - The Ekart frontend establishes an Express session (`session`, `session.sig`, `ab`, `epoctime` cookies).
-   - An active CSRF token is issued in the HTML `<meta name="csrf-token" content="...">` tag.
-2. **Modern Tracking Endpoint**:
-   - **URL**: `POST https://ekartlogistics.com/ekartlogistics-web-routes-api/ekartlogistics-web-proxy/trackings/v2`
-   - **Headers**:
-     - `User-Agent`: Chrome User Agent
-     - `X-User-Agent`: `<User-Agent> EKCL/website/1`
-     - `csrf-token`: Extracted CSRF token
-     - `Content-Type`: `application/json`
-     - `Origin`: `https://ekartlogistics.com`
-     - `Referer`: `https://ekartlogistics.com/shipmenttrack/<trackingId>`
-   - **Payload**: `{"tracking_ids": "<TRACKING_ID>"}`
-   - **Response Format**:
-     ```json
-     {
-       "FMPC0279658213": {
-         "shipmentTrackingDetails": [
-           {
-             "date": 1698765432000,
-             "city": "Bengaluru",
-             "statusDetails": "Received at Facility"
-           }
-         ],
-         "expectedDeliveryDate": 1698888000000,
-         "faShipment": true,
-         "reachedNearestHub": true
-       }
-     }
-     ```
-3. **Resilience & Auto-Recovery**:
-   - Handles CSRF expiration (`HTTP 205` / `EBADCSRFTOKEN`) by automatically renewing tokens and retrying.
-   - Built-in simulation and demo engine for testing tracking transitions, alerts, and bot triggers offline.
+### 1. Reverse-Engineered Tracking Mechanism
+* **Session Handshake**: Automatically resolves Express session cookies (`session`, `session.sig`, `ab`, `epoctime`).
+* **CSRF Token Parser**: Extracts the dynamic CSRF token from `<meta name="csrf-token" content="...">`.
+* **v2 Endpoint**: Issues POST requests to `/ekartlogistics-web-routes-api/ekartlogistics-web-proxy/trackings/v2` with `X-User-Agent: EKCL/website/1`.
+* **Self-Healing Retries**: Exponential backoff adapter with auto-renewal on HTTP 205 / `EBADCSRFTOKEN` token expiration.
 
 ---
 
-## ⚙️ Architecture & Choices
+## 🤖 Discord Bot Features
 
-- **Platform: Server Daemon**
-  - Continuous multi-threaded background polling worker checking active packages.
-  - Flask REST API (`http://127.0.0.1:5050`) for management, query, simulation, and notification triggers.
-  - SQLite persistence (`data/tracker.db`) for tracking states, milestone history, and notification logs.
-- **Notifications: Both (Email + Discord)**
-  - **Channel 1 (Email)**: Professional HTML emails with status color banners, badges, and milestone journey tables, plus plain-text fallback.
-  - **Channel 2 (Discord)**: Interactive Discord Bot and Webhook with rich embeds, dynamic status progress bars (`[🟩🟩🟩⬜⬜] 60%`), and channel announcements.
-- **Interface: Terminal**
-  - Built with `Rich` and `Click`.
-  - Color-coded shipment tables, timeline trees, live dashboard monitor, and interactive keyboard menu.
+The bot connects via Discord Gateway and provides real-time shipment updates directly in server channels or **private DMs**:
 
----
-
-## 🤖 Discord Bot Capabilities
-
-The tracker includes a full Discord Bot (`discord.py`) supporting both **Slash Commands** and **Prefix Commands** (`!track`, `!status`, etc.):
+### Commands Reference
 
 | Slash Command | Prefix Command | Description |
 |---|---|---|
-| `/track <id> [label] [sim]` | `!track <id> [label]` | Start tracking a package in the monitoring pool |
-| `/status <id>` | `!status <id>` | Inspect live status, ETA, and journey timeline |
-| `/list` | `!list` | Display all currently tracked shipments |
-| `/simulate <id>` | `!simulate <id>` | Advance simulated package to next stage to test alerts |
-| `/remove <id>` | `!remove <id>` | Stop tracking and remove a package |
-| `/notifytest` | `!notifytest` | Dispatch a sample alert embed to test channel integration |
-| `/help` | `!help` | View command guide |
-
-Whenever a package status updates, the server automatically posts an alert embed into the configured Discord channel and sends an email notification.
+| `/track <id> [label] [sim]` | `!track <id> [label]` | Start tracking a package. Automatically links updates to your DM or channel. |
+| `/status <id>` | `!status <id>` | View current live status, delivery ETA, nearest hub, and journey timeline. |
+| `/list` | `!list` | Display all actively tracked packages with live badges. |
+| `/simulate <id>` | `!simulate <id>` | Step a simulated package to the next stage to test alerts. |
+| `/remove <id>` | `!remove <id>` | Remove a package from the continuous monitoring pool. |
+| `/notifytest` | `!notifytest` | Send a sample notification card to test channel integration. |
+| `/help` | `!help` | View command guide and usage tips. |
 
 ---
 
-## 🚀 Quick Start
+## ⚡ Production Deployment Options
 
-### 1. Installation
-```powershell
-# Clone or navigate to the directory
-cd "d:\Shipment Tracker"
+### Option A: Render (Cloud Hosting)
+The repository is pre-configured with `render.yaml` and `Procfile`:
+1. Push this repository to GitHub.
+2. In [Render Dashboard](https://dashboard.render.com), click **New + ➔ Web Service** and connect your repository.
+3. Configure the environment variables:
+   * `DISCORD_BOT_TOKEN`: Your Discord Bot token
+   * `DISCORD_USER_ID`: Your Discord User ID (for private DM alerts)
+   * `POLL_INTERVAL_SECONDS`: `120`
+4. Deploy! To keep the free tier awake 24/7, set a free monitor on [UptimeRobot](https://uptimerobot.com) to ping `https://your-service.onrender.com/health` every 10 minutes.
 
+### Option B: Docker & Docker Compose
+A production `Dockerfile` with non-root security and healthcheck is included:
+```bash
+# Build and run with Docker Compose (with persistent volume)
+docker compose up -d
+
+# Check logs
+docker compose logs -f
+
+# Check container health
+docker ps
+```
+
+### Option C: Local / VPS Daemon (Linux / Windows)
+```bash
 # Install dependencies
-python -m pip install -r requirements.txt
-python -m pip install -e .
+pip install -r requirements.txt
+pip install -e .
+
+# Run the unified server + Discord bot
+python run.py
 ```
-
-### 2. Configuration (`.env`)
-Copy `.env.example` to `.env`:
-```env
-# Server
-SERVER_HOST=127.0.0.1
-SERVER_PORT=5050
-POLL_INTERVAL_SECONDS=120
-
-# Notifications: Channel 1 (Email)
-NOTIFY_EMAIL_ENABLED=true
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USE_TLS=true
-SMTP_USER=your_email@gmail.com
-SMTP_PASSWORD=your_app_password
-EMAIL_FROM=Ekart Tracker <your_email@gmail.com>
-EMAIL_TO=recipient@example.com
-
-# Notifications: Channel 2 (Discord Bot & Webhook)
-NOTIFY_WEBHOOK_ENABLED=true
-DISCORD_BOT_ENABLED=true
-DISCORD_BOT_TOKEN=your_discord_bot_token_here
-DISCORD_CHANNEL_ID=your_discord_channel_id_here
-DISCORD_PREFIX=!
-
-# Optional Discord Webhook fallback
-WEBHOOK_URL=https://discord.com/api/webhooks/...
-```
-*(Note: If credentials are not configured, the system operates in Dry-Run simulation mode, allowing complete testing without failure.)*
 
 ---
 
 ## 💻 Terminal CLI Commands
 
-### Server Daemon Management
 ```powershell
-# Check background server health & status
-python -m ekart_tracker.cli server status
-
-# Start server daemon (foreground)
-python -m ekart_tracker.cli server start
-
-# Start server in background
-python -m ekart_tracker.cli server start --daemon
-
-# Stop server daemon
-python -m ekart_tracker.cli server stop
-```
-
-### Tracking Packages
-```powershell
-# Query live Ekart portal immediately without saving
+# 1. Query live status of any Ekart package immediately
 python -m ekart_tracker.cli check FMPC0279658213
 
-# Add package to background tracking pool
-python -m ekart_tracker.cli add FMPC0279658213 --label "Flipkart Electronics"
+# 2. Add package to background tracking pool
+python -m ekart_tracker.cli add FMPC0279658213 --label "Laptop"
 
-# Add a simulated demo package
-python -m ekart_tracker.cli add SIM-LAPTOP --label "Gaming Laptop" --simulate
+# 3. Add demo package for testing
+python -m ekart_tracker.cli add SIM-WATCH --label "Smartwatch" --simulate
 
-# List tracked packages with status badges
+# 4. View formatted shipment list table
 python -m ekart_tracker.cli list
 
-# View detailed journey timeline tree
-python -m ekart_tracker.cli info SIM-LAPTOP
+# 5. View complete journey milestone tree
+python -m ekart_tracker.cli info SIM-WATCH
 
-# Remove a package
-python -m ekart_tracker.cli remove SIM-LAPTOP
-```
+# 6. Check background server status
+python -m ekart_tracker.cli server status
 
-### Discord Bot Controls
-```powershell
-# Check Discord Bot configuration status
-python -m ekart_tracker.cli bot status
-
-# Launch the Discord Bot
-python -m ekart_tracker.cli bot start
-```
-
-### Testing Notifications & Milestones
-```powershell
-# Advance a simulated package to test dual notifications (Email + Discord)
-python -m ekart_tracker.cli simulate SIM-LAPTOP
-
-# Trigger immediate test notification to both channels
-python -m ekart_tracker.cli notify-test
-
-# View notification dispatch history
-python -m ekart_tracker.cli notifications
-```
-
-### Interactive Live Dashboard & Menu
-```powershell
-# Launch auto-refreshing live terminal monitor
+# 7. Launch auto-refreshing live terminal monitor
 python -m ekart_tracker.cli dashboard
 
-# Launch interactive terminal navigation menu
-python -m ekart_tracker.cli menu
-# or simply:
+# 8. Interactive terminal menu
 python -m ekart_tracker
 ```
 
 ---
 
+## 📡 REST API Reference
+
+The server exposes standard JSON REST endpoints:
+
+* `GET /`: Service overview, version, uptime, and bot status.
+* `GET /health`: Healthcheck endpoint for load balancers and container monitors.
+* `GET /api/status`: Detailed system status, notification channel health, and tracking counts.
+* `GET /api/shipments`: List all tracked packages.
+* `POST /api/shipments`: Add new package to tracking (`{"tracking_id": "...", "label": "..."}`).
+* `GET /api/shipments/<id>`: Get journey details and milestone array for a package.
+* `DELETE /api/shipments/<id>`: Remove package from tracking.
+* `POST /api/shipments/<id>/refresh`: Force an immediate live refresh.
+* `POST /api/shipments/<id>/simulate`: Advance a simulated package to the next stage.
+* `GET /api/notifications`: View recent notification logs.
+
+---
+
 ## 🧪 Automated Testing
-Run the complete test suite:
-```powershell
+
+Run the test suite across tracking, SQLite storage, notification dispatchers, and REST endpoints:
+```bash
 python -m unittest discover -s tests
 ```
-All 17 tests covering tracking inspection, parsing, storage, dual-channel notifications, and REST endpoints pass with 100% success.
-
+All 17 tests run in under 2 seconds with 100% pass rate.

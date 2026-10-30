@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 import discord
 from discord.ext import commands
@@ -46,7 +46,7 @@ def create_discord_embed(details: ShipmentDetails, event_type: str = "Update", l
         color = 0x0EA5E9 # Cyan
 
     title = f"📦 Ekart Shipment {event_type}: {details.tracking_id}"
-    embed = discord.Embed(title=title, color=color, timestamp=datetime.utcnow())
+    embed = discord.Embed(title=title, color=color, timestamp=datetime.now(timezone.utc))
     embed.set_author(name="Ekart Logistics Tracker", icon_url=EKART_LOGO_URL)
     embed.set_thumbnail(url=EKART_LOGO_URL)
 
@@ -157,7 +157,7 @@ def setup_bot() -> commands.Bot:
         embed = discord.Embed(
             title="📦 Actively Tracked Ekart Shipments",
             color=0x0EA5E9,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now(timezone.utc)
         )
         embed.set_author(name="Ekart Logistics Tracker", icon_url=EKART_LOGO_URL)
 
@@ -278,7 +278,7 @@ def setup_bot() -> commands.Bot:
             await ctx.send("📦 No shipments are currently tracked. Use `!track <id>` to start tracking!")
             return
 
-        embed = discord.Embed(title="📦 Actively Tracked Ekart Shipments", color=0x0EA5E9, timestamp=datetime.utcnow())
+        embed = discord.Embed(title="📦 Actively Tracked Ekart Shipments", color=0x0EA5E9, timestamp=datetime.now(timezone.utc))
         for s in shipments[:25]:
             mode = "🟣 [Simulated]" if s.is_simulated else "🔵 [Live]"
             eta = f"ETA: {s.expected_delivery}" if s.expected_delivery else "ETA: TBD"

@@ -276,7 +276,7 @@ class TrackingServerDaemon:
 
         logger.info("Starting Ekart Tracker Server daemon on http://%s:%d", self.host, self.port)
         try:
-            self.app.run(host=self.host, port=self.port, debug=False, use_reloader=False)
+            self.app.run(host=self.host, port=self.port, debug=False, use_reloader=False, threaded=True)
         finally:
             self.stop()
 

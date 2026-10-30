@@ -42,6 +42,18 @@ class EkartLiveClient:
     def __init__(self, timeout: int = 15):
         self.timeout = timeout
         self.session = requests.Session()
+        
+        # Configure exponential backoff retry adapter
+        try:
+            from urllib3.util.retry import Retry
+            from requests.adapters import HTTPAdapter
+            retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
+            adapter = HTTPAdapter(max_retries=retries)
+            self.session.mount("https://", adapter)
+            self.session.mount("http://", adapter)
+        except Exception:
+            pass
+
         self.csrf_token: Optional[str] = None
         self._last_token_time: float = 0
 
