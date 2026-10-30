@@ -54,7 +54,7 @@ class ShipmentView(discord.ui.View):
 
         shipment = self.storage.get_shipment(self.tracking_id)
         if not shipment:
-            shipment = self.storage.add_shipment(self.tracking_id, label=self.label or f"Package {self.tracking_id}", notify_target=channel_id)
+            shipment = self.storage.add_shipment(self.tracking_id, label=self.label or f"Package {self.tracking_id}", notify_target=channel_id, user_id=str(interaction.user.id))
             await interaction.response.send_message(f"🔔 **Subscribed!** You will receive auto-alerts for `{self.tracking_id}` in this channel.", ephemeral=True)
             return
 
@@ -190,11 +190,13 @@ def setup_bot() -> commands.Bot:
         is_sim = simulate or clean_id.startswith("SIM-") or clean_id.startswith("DEMO-")
         await interaction.response.defer(thinking=True)
 
+        user_id = str(interaction.user.id)
         storage.add_shipment(
             clean_id,
             label=label or f"Package {clean_id}",
             is_simulated=is_sim,
-            notify_target=str(interaction.channel_id) if interaction.channel_id else None
+            notify_target=str(interaction.channel_id) if interaction.channel_id else None,
+            user_id=user_id
         )
         try:
             details = tracker.track(clean_id, force_simulated=is_sim)
@@ -222,15 +224,16 @@ def setup_bot() -> commands.Bot:
         except Exception as e:
             await interaction.followup.send(f"❌ Error querying status for `{clean_id}`: `{e}`")
 
-    @bot.tree.command(name="list", description="List all actively tracked shipments")
+    @bot.tree.command(name="list", description="List all your actively tracked shipments")
     async def slash_list(interaction: discord.Interaction):
-        shipments = storage.list_shipments(active_only=True)
+        user_id = str(interaction.user.id)
+        shipments = storage.list_shipments(user_id=user_id, active_only=True)
         if not shipments:
-            await interaction.response.send_message("📦 No shipments are currently tracked. Use `/track <id>` to start tracking!")
+            await interaction.response.send_message("📦 You don't have any actively tracked shipments. Use `/track <id>` to start tracking your packages!", ephemeral=True)
             return
 
         embed = discord.Embed(
-            title="📦 Actively Tracked Ekart Shipments",
+            title=f"📦 Your Tracked Shipments ({len(shipments)})",
             color=0x0EA5E9,
             timestamp=datetime.now(timezone.utc)
         )
@@ -245,17 +248,25 @@ def setup_bot() -> commands.Bot:
                 inline=False
             )
 
-        embed.set_footer(text=f"Total: {len(shipments)} shipments • Ekart Tracker Server")
-        await interaction.response.send_message(embed=embed)
+        embed.set_footer(text="Your Private Tracking List • Ekart Tracker")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @bot.tree.command(name="remove", description="Remove a shipment from the tracking list")
+    @bot.tree.command(name="remove", description="Remove a shipment from your tracking list")
     @app_commands.describe(tracking_id="Tracking ID to remove")
     async def slash_remove(interaction: discord.Interaction, tracking_id: str):
         clean_id = tracking_id.strip().upper()
-        if storage.remove_shipment(clean_id):
-            await interaction.response.send_message(f"✅ Shipment `{clean_id}` has been removed from tracking.")
-        else:
-            await interaction.response.send_message(f"⚠️ Shipment `{clean_id}` was not found in the database.")
+        user_id = str(interaction.user.id)
+        shipment = storage.get_shipment(clean_id)
+        if not shipment:
+            await interaction.response.send_message(f"⚠️ Shipment `{clean_id}` was not found in your tracking list.", ephemeral=True)
+            return
+
+        if shipment.user_id and shipment.user_id != user_id:
+            await interaction.response.send_message(f"❌ You cannot remove `{clean_id}` because it was tracked by another user.", ephemeral=True)
+            return
+
+        storage.remove_shipment(clean_id, user_id=user_id)
+        await interaction.response.send_message(f"✅ Shipment `{clean_id}` has been removed from your tracking list.", ephemeral=True)
 
     @bot.tree.command(name="simulate", description="Advance milestone stage of a simulated package (triggers alerts)")
     @app_commands.describe(tracking_id="Tracking ID to advance (e.g. SIM-LAPTOP)")
@@ -381,11 +392,13 @@ def setup_bot() -> commands.Bot:
     async def cmd_track(ctx: commands.Context, tracking_id: str, *, label: str = ""):
         clean_id = tracking_id.strip().upper()
         is_sim = clean_id.startswith("SIM-") or clean_id.startswith("DEMO-")
+        user_id = str(ctx.author.id)
         storage.add_shipment(
             clean_id,
             label=label or f"Package {clean_id}",
             is_simulated=is_sim,
-            notify_target=str(ctx.channel.id) if ctx.channel else None
+            notify_target=str(ctx.channel.id) if ctx.channel else None,
+            user_id=user_id
         )
         try:
             details = tracker.track(clean_id, force_simulated=is_sim)
@@ -408,21 +421,21 @@ def setup_bot() -> commands.Bot:
             await ctx.send(embed=embed, view=ShipmentView(clean_id, label=shipment.label if shipment else "", storage=storage, tracker=tracker))
         except Exception as e:
             await ctx.send(f"❌ Error querying status for `{clean_id}`: `{e}`")
-        except Exception as e:
-            await ctx.send(f"❌ Error querying status for `{clean_id}`: `{e}`")
 
     @bot.command(name="list")
     async def cmd_list(ctx: commands.Context):
-        shipments = storage.list_shipments(active_only=True)
+        user_id = str(ctx.author.id)
+        shipments = storage.list_shipments(user_id=user_id, active_only=True)
         if not shipments:
-            await ctx.send("📦 No shipments are currently tracked. Use `!track <id>` to start tracking!")
+            await ctx.send("📦 You don't have any actively tracked shipments. Use `!track <id>` to track a package!")
             return
 
-        embed = discord.Embed(title="📦 Actively Tracked Ekart Shipments", color=0x0EA5E9, timestamp=datetime.now(timezone.utc))
+        embed = discord.Embed(title=f"📦 Your Tracked Shipments ({len(shipments)})", color=0x0EA5E9, timestamp=datetime.now(timezone.utc))
         for s in shipments[:25]:
             mode = "🟣 [Simulated]" if s.is_simulated else "🔵 [Live]"
             eta = f"ETA: {s.expected_delivery}" if s.expected_delivery else "ETA: TBD"
             embed.add_field(name=f"{s.tracking_id} {mode}", value=f"**Label:** {s.label or 'N/A'}\n**Status:** `{s.current_status}`\n*{eta}*", inline=False)
+        embed.set_footer(text=f"Private list for {ctx.author.name} • Ekart Tracker")
         await ctx.send(embed=embed)
 
     @bot.command(name="simulate")
@@ -430,7 +443,7 @@ def setup_bot() -> commands.Bot:
         clean_id = tracking_id.strip().upper()
         shipment = storage.get_shipment(clean_id)
         if not shipment:
-            shipment = storage.add_shipment(clean_id, "Simulated Package", is_simulated=True)
+            shipment = storage.add_shipment(clean_id, "Simulated Package", is_simulated=True, user_id=str(ctx.author.id))
 
         old_status = shipment.current_status
         tracker.mock_client.set_stage_from_status(clean_id, old_status)
@@ -448,10 +461,18 @@ def setup_bot() -> commands.Bot:
     @bot.command(name="remove", aliases=["delete"])
     async def cmd_remove(ctx: commands.Context, tracking_id: str):
         clean_id = tracking_id.strip().upper()
-        if storage.remove_shipment(clean_id):
-            await ctx.send(f"✅ Shipment `{clean_id}` has been removed from tracking.")
-        else:
-            await ctx.send(f"⚠️ Shipment `{clean_id}` was not found.")
+        user_id = str(ctx.author.id)
+        shipment = storage.get_shipment(clean_id)
+        if not shipment:
+            await ctx.send(f"⚠️ Shipment `{clean_id}` was not found in your tracking list.")
+            return
+
+        if shipment.user_id and shipment.user_id != user_id:
+            await ctx.send(f"❌ You cannot remove `{clean_id}` because it was tracked by another user.")
+            return
+
+        storage.remove_shipment(clean_id, user_id=user_id)
+        await ctx.send(f"✅ Shipment `{clean_id}` has been removed from your tracking list.")
 
     @bot.command(name="notifytest")
     async def cmd_notifytest(ctx: commands.Context):

@@ -75,6 +75,30 @@ class TestStorage(unittest.TestCase):
         self.assertIn("active_shipments", stats)
         self.assertIn("total_notifications", stats)
 
+    def test_per_user_isolation(self):
+        self.storage.add_shipment("PKG_USER_A", label="User A Shoes", user_id="user_A_999")
+        self.storage.add_shipment("PKG_USER_B", label="User B Watch", user_id="user_B_888")
+
+        # Test private list for User A
+        list_a = self.storage.list_shipments(user_id="user_A_999")
+        self.assertEqual(len(list_a), 1)
+        self.assertEqual(list_a[0].tracking_id, "PKG_USER_A")
+
+        # Test private list for User B
+        list_b = self.storage.list_shipments(user_id="user_B_888")
+        self.assertEqual(len(list_b), 1)
+        self.assertEqual(list_b[0].tracking_id, "PKG_USER_B")
+
+        # Test User B cannot delete User A's package
+        can_delete = self.storage.remove_shipment("PKG_USER_A", user_id="user_B_888")
+        self.assertFalse(can_delete)
+        self.assertIsNotNone(self.storage.get_shipment("PKG_USER_A"))
+
+        # Test User A can delete their own package
+        can_delete_own = self.storage.remove_shipment("PKG_USER_A", user_id="user_A_999")
+        self.assertTrue(can_delete_own)
+        self.assertIsNone(self.storage.get_shipment("PKG_USER_A"))
+
 if __name__ == "__main__":
     unittest.main()
 

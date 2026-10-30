@@ -44,13 +44,18 @@ class TrackerStorage:
                     last_checked_at TEXT,
                     is_active INTEGER DEFAULT 1,
                     milestones_json TEXT,
-                    notify_target TEXT
+                    notify_target TEXT,
+                    user_id TEXT
                 )
             """)
 
             # Safe migration for existing databases
             try:
                 cursor.execute("ALTER TABLE shipments ADD COLUMN notify_target TEXT")
+            except Exception:
+                pass
+            try:
+                cursor.execute("ALTER TABLE shipments ADD COLUMN user_id TEXT")
             except Exception:
                 pass
 
@@ -68,6 +73,7 @@ class TrackerStorage:
             """)
 
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_shipments_active ON shipments (is_active, last_checked_at)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_shipments_user ON shipments (user_id, is_active)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_notifications_tid ON notifications (tracking_id, created_at)")
             conn.commit()
         finally:
@@ -116,7 +122,7 @@ class TrackerStorage:
         finally:
             conn.close()
 
-    def add_shipment(self, tracking_id: str, label: str = "", is_simulated: bool = False, notify_target: Optional[str] = None) -> TrackedShipment:
+    def add_shipment(self, tracking_id: str, label: str = "", is_simulated: bool = False, notify_target: Optional[str] = None, user_id: Optional[str] = None) -> TrackedShipment:
         clean_id = tracking_id.strip().upper()
         now_str = now_ist().isoformat()
         conn = self._get_connection()
@@ -125,13 +131,14 @@ class TrackerStorage:
             cursor.execute("""
                 INSERT INTO shipments (
                     tracking_id, label, is_simulated, current_status, expected_delivery,
-                    is_delivered, created_at, last_checked_at, is_active, milestones_json, notify_target
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                    is_delivered, created_at, last_checked_at, is_active, milestones_json, notify_target, user_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
                 ON CONFLICT(tracking_id) DO UPDATE SET
                     label = excluded.label,
                     is_active = 1,
                     is_simulated = excluded.is_simulated,
-                    notify_target = COALESCE(excluded.notify_target, shipments.notify_target)
+                    notify_target = COALESCE(excluded.notify_target, shipments.notify_target),
+                    user_id = COALESCE(excluded.user_id, shipments.user_id)
             """, (
                 clean_id,
                 label or f"Ekart Package {clean_id}",
@@ -142,7 +149,8 @@ class TrackerStorage:
                 now_str,
                 None,
                 json.dumps([]),
-                notify_target
+                notify_target,
+                user_id
             ))
             conn.commit()
         finally:
@@ -162,14 +170,20 @@ class TrackerStorage:
         finally:
             conn.close()
 
-    def list_shipments(self, active_only: bool = True) -> List[TrackedShipment]:
+    def list_shipments(self, user_id: Optional[str] = None, active_only: bool = True) -> List[TrackedShipment]:
         conn = self._get_connection()
         try:
             cursor = conn.cursor()
-            if active_only:
-                cursor.execute("SELECT * FROM shipments WHERE is_active = 1 ORDER BY created_at DESC")
+            if user_id:
+                if active_only:
+                    cursor.execute("SELECT * FROM shipments WHERE user_id = ? AND is_active = 1 ORDER BY created_at DESC", (user_id,))
+                else:
+                    cursor.execute("SELECT * FROM shipments WHERE user_id = ? ORDER BY created_at DESC", (user_id,))
             else:
-                cursor.execute("SELECT * FROM shipments ORDER BY created_at DESC")
+                if active_only:
+                    cursor.execute("SELECT * FROM shipments WHERE is_active = 1 ORDER BY created_at DESC")
+                else:
+                    cursor.execute("SELECT * FROM shipments ORDER BY created_at DESC")
             rows = cursor.fetchall()
             return [self._row_to_shipment(r) for r in rows]
         finally:
@@ -201,12 +215,15 @@ class TrackerStorage:
         finally:
             conn.close()
 
-    def remove_shipment(self, tracking_id: str) -> bool:
+    def remove_shipment(self, tracking_id: str, user_id: Optional[str] = None) -> bool:
         clean_id = tracking_id.strip().upper()
         conn = self._get_connection()
         try:
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM shipments WHERE tracking_id = ?", (clean_id,))
+            if user_id:
+                cursor.execute("DELETE FROM shipments WHERE tracking_id = ? AND (user_id = ? OR user_id IS NULL)", (clean_id, user_id))
+            else:
+                cursor.execute("DELETE FROM shipments WHERE tracking_id = ?", (clean_id,))
             conn.commit()
             return cursor.rowcount > 0
         finally:
@@ -283,6 +300,11 @@ class TrackerStorage:
             notify_target = row["notify_target"]
         except Exception:
             pass
+        user_id = None
+        try:
+            user_id = row["user_id"]
+        except Exception:
+            pass
         return TrackedShipment(
             tracking_id=row["tracking_id"],
             label=row["label"] or "",
@@ -294,5 +316,6 @@ class TrackerStorage:
             last_checked_at=row["last_checked_at"],
             is_active=bool(row["is_active"]),
             milestones=milestones,
-            notify_target=notify_target
+            notify_target=notify_target,
+            user_id=user_id
         )

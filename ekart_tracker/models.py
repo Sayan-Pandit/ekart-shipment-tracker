@@ -181,6 +181,7 @@ class TrackedShipment:
     is_active: bool
     milestones: List[Milestone] = field(default_factory=list)
     notify_target: Optional[str] = None
+    user_id: Optional[str] = None
 
     @property
     def progress_percentage(self) -> int:
@@ -204,7 +205,8 @@ class TrackedShipment:
             "last_checked_at": self.last_checked_at,
             "is_active": self.is_active,
             "milestones": [m.to_dict() for m in self.milestones],
-            "notify_target": self.notify_target
+            "notify_target": self.notify_target,
+            "user_id": self.user_id
         }
 
 @dataclass
