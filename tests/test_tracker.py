@@ -111,7 +111,24 @@ class TestEkartTracker(unittest.TestCase):
         mock = MockEkartClient()
         details = mock.track("SIM-IST-01")
         self.assertTrue(any("IST" in m.time_str for m in details.milestones))
-        self.assertIn("IST", details.expected_delivery_date)
+        self.assertIsNotNone(details.expected_delivery_epoch)
+
+    def test_deduplicated_milestones_and_location(self):
+        from ekart_tracker.models import Milestone, ShipmentDetails
+        m1 = Milestone(date_str="Oct 30", time_str="10:00 AM", city="Nadia", status_details="Received at Hub")
+        m2 = Milestone(date_str="Oct 30", time_str="10:02 AM", city="Nadia", status_details="Received at Hub") # Duplicate
+        m3 = Milestone(date_str="Oct 30", time_str="11:30 AM", city="Uluberia", status_details="Dispatched")
+        
+        details = ShipmentDetails(
+            tracking_id="TEST-DUP",
+            status="In Transit",
+            milestones=[m1, m2, m3]
+        )
+        self.assertEqual(len(details.milestones), 3)
+        self.assertEqual(len(details.deduplicated_milestones), 2)
+        self.assertEqual(details.deduplicated_milestones[0].city, "Nadia")
+        self.assertEqual(details.deduplicated_milestones[1].city, "Uluberia")
+        self.assertEqual(details.current_location, "Uluberia")
 
 if __name__ == "__main__":
     unittest.main()

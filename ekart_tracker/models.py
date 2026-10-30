@@ -96,6 +96,7 @@ class ShipmentDetails:
     tracking_id: str
     status: str
     expected_delivery_date: Optional[str] = None
+    expected_delivery_epoch: Optional[int] = None
     is_delivered: bool = False
     fa_shipment: bool = False
     reached_nearest_hub: bool = False
@@ -110,16 +111,44 @@ class ShipmentDetails:
     def is_terminal(self) -> bool:
         return self.is_delivered or ShipmentStatus.is_terminal_status(self.status)
 
+    @property
+    def current_location(self) -> str:
+        """Return the most recent hub/city location or transit state."""
+        if self.milestones:
+            latest = self.milestones[-1]
+            city = (latest.city or "").strip()
+            if city and city not in ("N/A", "Facility / Transit Hub"):
+                return city
+            return latest.status_details
+        return "Logistics Hub"
+
+    @property
+    def deduplicated_milestones(self) -> List[Milestone]:
+        """Remove consecutive duplicate scans at the same hub and status."""
+        if not self.milestones:
+            return []
+        cleaned: List[Milestone] = [self.milestones[0]]
+        for m in self.milestones[1:]:
+            prev = cleaned[-1]
+            same_city = (m.city or "").strip().lower() == (prev.city or "").strip().lower()
+            same_status = (m.status_details or "").strip().lower() == (prev.status_details or "").strip().lower()
+            if same_city and same_status:
+                continue
+            cleaned.append(m)
+        return cleaned
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "tracking_id": self.tracking_id,
             "status": self.status,
             "progress_percentage": self.progress_percentage,
             "expected_delivery_date": self.expected_delivery_date,
+            "expected_delivery_epoch": self.expected_delivery_epoch,
             "is_delivered": self.is_delivered,
             "is_terminal": self.is_terminal,
             "fa_shipment": self.fa_shipment,
             "reached_nearest_hub": self.reached_nearest_hub,
+            "current_location": self.current_location,
             "milestones": [m.to_dict() for m in self.milestones],
             "raw_data": self.raw_data
         }
@@ -131,6 +160,7 @@ class ShipmentDetails:
             tracking_id=data.get("tracking_id", ""),
             status=data.get("status", ShipmentStatus.UNKNOWN),
             expected_delivery_date=data.get("expected_delivery_date"),
+            expected_delivery_epoch=data.get("expected_delivery_epoch"),
             is_delivered=data.get("is_delivered", False),
             fa_shipment=data.get("fa_shipment", False),
             reached_nearest_hub=data.get("reached_nearest_hub", False),

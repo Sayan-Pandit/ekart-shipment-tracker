@@ -17,70 +17,134 @@ logger = logging.getLogger("ekart_discord_bot")
 EKART_LOGO_URL = "https://static-assets-web.flixcart.com/batman-returns/batman-returns/p/images/logo_lite-cbb357.png"
 
 class ShipmentView(discord.ui.View):
-    """Interactive Discord View providing quick links to official tracking portals."""
-    def __init__(self, tracking_id: str):
+    """Interactive Discord View providing live refresh, portal links, and alert toggles."""
+    def __init__(self, tracking_id: str, label: str = "", storage: Optional[TrackerStorage] = None, tracker: Optional[ShipmentTracker] = None):
         super().__init__(timeout=None)
-        clean = tracking_id.strip().upper()
-        url = ShipmentTracker.get_tracking_url(clean)
-        self.add_item(discord.ui.Button(label="🔎 View on Ekart Portal", url=url, style=discord.ButtonStyle.link))
+        self.tracking_id = tracking_id.strip().upper()
+        self.label = label
+        self.storage = storage or TrackerStorage()
+        self.tracker = tracker or ShipmentTracker()
+
+        # Link to Official Portal
+        url = ShipmentTracker.get_tracking_url(self.tracking_id)
+        self.add_item(discord.ui.Button(label="🔎 View on Ekart Portal", url=url, style=discord.ButtonStyle.link, row=0))
+
+    @discord.ui.button(label="🔄 Refresh", style=discord.ButtonStyle.primary, row=0)
+    async def btn_refresh(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        try:
+            shipment = self.storage.get_shipment(self.tracking_id)
+            is_sim = shipment.is_simulated if shipment else (self.tracking_id.startswith("SIM-") or self.tracking_id.startswith("DEMO-"))
+            details = self.tracker.track(self.tracking_id, force_simulated=is_sim, use_cache=False)
+            if shipment:
+                self.storage.update_shipment_details(details)
+            label = self.label or (shipment.label if shipment else "")
+            new_embed = create_discord_embed(details, event_type="Live Refresh", label=label)
+            await interaction.message.edit(embed=new_embed, view=self)
+            await interaction.followup.send(f"✅ Refreshed status for `{self.tracking_id}`!", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"⚠️ Refresh failed: `{e}`", ephemeral=True)
+
+    @discord.ui.button(label="🔔 Toggle Alerts", style=discord.ButtonStyle.secondary, row=0)
+    async def btn_toggle_alerts(self, interaction: discord.Interaction, button: discord.ui.Button):
+        channel_id = str(interaction.channel_id) if interaction.channel_id else None
+        if not channel_id:
+            await interaction.response.send_message("⚠️ Could not detect channel ID.", ephemeral=True)
+            return
+
+        shipment = self.storage.get_shipment(self.tracking_id)
+        if not shipment:
+            shipment = self.storage.add_shipment(self.tracking_id, label=self.label or f"Package {self.tracking_id}", notify_target=channel_id)
+            await interaction.response.send_message(f"🔔 **Subscribed!** You will receive auto-alerts for `{self.tracking_id}` in this channel.", ephemeral=True)
+            return
+
+        if shipment.notify_target == channel_id:
+            conn = self.storage._get_connection()
+            try:
+                conn.execute("UPDATE shipments SET notify_target = NULL WHERE tracking_id = ?", (self.tracking_id,))
+                conn.commit()
+            finally:
+                conn.close()
+            await interaction.response.send_message(f"🔕 **Alerts Muted:** Notifications for `{self.tracking_id}` turned off in this channel.", ephemeral=True)
+        else:
+            conn = self.storage._get_connection()
+            try:
+                conn.execute("UPDATE shipments SET notify_target = ? WHERE tracking_id = ?", (channel_id, self.tracking_id))
+                conn.commit()
+            finally:
+                conn.close()
+            await interaction.response.send_message(f"🔔 **Subscribed!** Notifications for `{self.tracking_id}` will now route to this channel.", ephemeral=True)
 
 def get_progress_bar(status: str) -> str:
-    s = status.lower()
-    if "delivered" in s:
-        return "`[🟩🟩🟩🟩🟩]` 100% Delivered"
-    elif "out for delivery" in s:
-        return "`[🟩🟩🟩🟩⬜]` 80% Out for Delivery"
-    elif "nearest hub" in s or "reached facility" in s:
-        return "`[🟩🟩🟩⬜⬜]` 60% At Nearest Hub"
-    elif "in transit" in s or "dispatched" in s:
-        return "`[🟩🟩⬜⬜⬜]` 40% In Transit"
-    elif "picked up" in s:
-        return "`[🟩⬜⬜⬜⬜]` 20% Picked Up"
-    return "`[⬜⬜⬜⬜⬜]` 10% Order Placed"
+    norm = ShipmentStatus.normalize(status)
+    pct = ShipmentStatus.get_progress_percentage(norm)
+    filled = min(5, max(1, pct // 20))
+    bar = "🟩" * filled + "⬜" * (5 - filled)
+    return f"`[{bar}]` **{pct}%** ({norm})"
 
-def create_discord_embed(details: ShipmentDetails, event_type: str = "Update", label: str = "") -> discord.Embed:
+def create_discord_embed(details: ShipmentDetails, event_type: str = "Status", label: str = "") -> discord.Embed:
     status_lower = details.status.lower()
     if "delivered" in status_lower:
         color = 0x10B981 # Green
+        status_icon = "🏁"
     elif "out for delivery" in status_lower:
         color = 0xF59E0B # Gold / Amber
+        status_icon = "🚚"
     elif "nearest hub" in status_lower:
         color = 0x6366F1 # Indigo
+        status_icon = "📍"
     elif "in transit" in status_lower:
         color = 0x3B82F6 # Blue
+        status_icon = "🚛"
     elif "picked up" in status_lower:
         color = 0x8B5CF6 # Purple
+        status_icon = "📦"
     else:
         color = 0x0EA5E9 # Cyan
+        status_icon = "📦"
 
-    title = f"📦 Ekart Shipment {event_type}: {details.tracking_id}"
+    title = f"📦 Ekart Shipment: {details.tracking_id}"
     embed = discord.Embed(title=title, color=color, timestamp=datetime.now(timezone.utc))
     embed.set_author(name="Ekart Logistics Tracker", icon_url=EKART_LOGO_URL)
     embed.set_thumbnail(url=EKART_LOGO_URL)
 
     progress_str = get_progress_bar(details.status)
-    desc_lines = [
-        f"**Status:** `{details.status}`",
-        f"**Progress:** {progress_str}",
-    ]
+    desc_lines = []
     if label:
-        desc_lines.insert(0, f"**Package:** *{label}*")
+        desc_lines.append(f"🏷️ **Item:** `{label}`")
+    desc_lines.append(f"**Status:** {status_icon} `{details.status.upper()}`")
+    desc_lines.append(f"**Progress:** {progress_str}")
+    desc_lines.append(f"**Current Location:** 📍 **{details.current_location}**")
     embed.description = "\n".join(desc_lines)
 
-    embed.add_field(name="📅 Estimated Delivery", value=details.expected_delivery_date or "To be announced", inline=True)
+    # Smart ETA formatting with Discord native relative timestamp
+    if details.expected_delivery_epoch:
+        eta_val = f"<t:{details.expected_delivery_epoch}:D>\n└ <t:{details.expected_delivery_epoch}:R>"
+    elif details.expected_delivery_date:
+        eta_val = f"**{details.expected_delivery_date}**"
+    else:
+        eta_val = "*To be announced*"
+
+    embed.add_field(name="📅 Estimated Delivery", value=eta_val, inline=True)
     embed.add_field(name="📍 Nearest Hub", value="✅ Arrived" if details.reached_nearest_hub else "⏳ On Route", inline=True)
     embed.add_field(name="🏁 Delivered", value="✅ YES" if details.is_delivered else "⏳ In Progress", inline=True)
 
-    # Milestones timeline
-    if details.milestones:
+    # Deduplicated milestones timeline with tree connectors
+    milestones = details.deduplicated_milestones
+    if milestones:
         timeline_entries = []
-        for m in reversed(details.milestones[-5:]):
-            timeline_entries.append(f"• **{m.date_str} {m.time_str}** ({m.city})\n  └ *{m.status_details}*")
+        for idx, m in enumerate(reversed(milestones[-5:])):
+            prefix = "🟢" if idx == 0 else "•"
+            time_display = f"{m.date_str} • {m.time_str}"
+            city_display = f"**{m.city}**" if m.city and m.city != "N/A" else ""
+            header = f"{prefix} **{time_display}** {f'({city_display})' if city_display else ''}"
+            detail = f"  └── *{m.status_details}*"
+            timeline_entries.append(f"{header}\n{detail}")
         embed.add_field(name="🚚 Recent Activity Timeline", value="\n".join(timeline_entries), inline=False)
     else:
         embed.add_field(name="🚚 Recent Activity Timeline", value="*No tracking milestones available yet.*", inline=False)
 
-    embed.set_footer(text=f"Ekart Tracker Server • Real-time Alert ({now_ist().strftime('%I:%M %p IST')})")
+    embed.set_footer(text=f"Ekart Tracker Server • Updated {now_ist().strftime('%I:%M %p IST')}")
     return embed
 
 
@@ -133,7 +197,7 @@ def setup_bot() -> commands.Bot:
             details = tracker.track(clean_id, force_simulated=is_sim)
             storage.update_shipment_details(details)
             embed = create_discord_embed(details, event_type="Tracked", label=label)
-            await interaction.followup.send(embed=embed, view=ShipmentView(clean_id))
+            await interaction.followup.send(embed=embed, view=ShipmentView(clean_id, label=label, storage=storage, tracker=tracker))
         except Exception as e:
             await interaction.followup.send(f"⚠️ Tracking saved, but live query encountered: `{e}`")
 
@@ -151,7 +215,7 @@ def setup_bot() -> commands.Bot:
             if shipment:
                 storage.update_shipment_details(details)
             embed = create_discord_embed(details, event_type="Status", label=shipment.label if shipment else "")
-            await interaction.followup.send(embed=embed, view=ShipmentView(clean_id))
+            await interaction.followup.send(embed=embed, view=ShipmentView(clean_id, label=shipment.label if shipment else "", storage=storage, tracker=tracker))
         except Exception as e:
             await interaction.followup.send(f"❌ Error querying status for `{clean_id}`: `{e}`")
 
@@ -209,7 +273,8 @@ def setup_bot() -> commands.Bot:
         embed = create_discord_embed(details, event_type=f"Stage Advanced (Step {new_stage})", label=shipment.label)
         await interaction.followup.send(
             content=f"🔔 **Milestone Advanced:** `{old_status}` ➔ `{details.status}`",
-            embed=embed
+            embed=embed,
+            view=ShipmentView(clean_id, label=shipment.label if shipment else "", storage=storage, tracker=tracker)
         )
 
     @bot.tree.command(name="notifytest", description="Send a test notification embed to verify Discord channel alerts")
@@ -274,7 +339,7 @@ def setup_bot() -> commands.Bot:
             details = tracker.track(clean_id, force_simulated=is_sim)
             storage.update_shipment_details(details)
             embed = create_discord_embed(details, event_type="Tracked", label=label)
-            await ctx.send(embed=embed, view=ShipmentView(clean_id))
+            await ctx.send(embed=embed, view=ShipmentView(clean_id, label=label, storage=storage, tracker=tracker))
         except Exception as e:
             await ctx.send(f"⚠️ Tracking saved, but live query encountered: `{e}`")
 
@@ -288,7 +353,7 @@ def setup_bot() -> commands.Bot:
             if shipment:
                 storage.update_shipment_details(details)
             embed = create_discord_embed(details, event_type="Status", label=shipment.label if shipment else "")
-            await ctx.send(embed=embed, view=ShipmentView(clean_id))
+            await ctx.send(embed=embed, view=ShipmentView(clean_id, label=shipment.label if shipment else "", storage=storage, tracker=tracker))
         except Exception as e:
             await ctx.send(f"❌ Error querying status for `{clean_id}`: `{e}`")
         except Exception as e:
@@ -322,7 +387,11 @@ def setup_bot() -> commands.Bot:
         storage.update_shipment_details(details)
 
         embed = create_discord_embed(details, event_type=f"Stage Advanced (Step {new_stage})", label=shipment.label)
-        await ctx.send(content=f"🔔 **Milestone Advanced:** `{old_status}` ➔ `{details.status}`", embed=embed)
+        await ctx.send(
+            content=f"🔔 **Milestone Advanced:** `{old_status}` ➔ `{details.status}`",
+            embed=embed,
+            view=ShipmentView(clean_id, label=shipment.label if shipment else "", storage=storage, tracker=tracker)
+        )
 
     @bot.command(name="remove", aliases=["delete"])
     async def cmd_remove(ctx: commands.Context, tracking_id: str):

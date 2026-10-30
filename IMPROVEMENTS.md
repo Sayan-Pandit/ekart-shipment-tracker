@@ -18,6 +18,7 @@ This document provides a comprehensive audit of all improvements made to the **E
 | **Observability** | Centralized System Metrics (`/api/stats` and `!stats`) | Fast real-time insight into active packages, delivery counts, and alerts. |
 | **Timezone Precision** | Indian Standard Time (`IST` - UTC+05:30) across entire system | Matches actual courier timings in India; eliminates 5.5-hour GMT offset. |
 | **Web Dashboard** | Responsive Web Status Page on Root URL (`/`) & `/favicon.ico` | Prevents 404 on cloud platforms (Render); beautiful visual landing page. |
+| **Interactive Discord UX** | In-Place `Refresh` & `Toggle Alerts` Buttons + Deduplication | 1-click live updates, channel subscriptions, and clean milestone trees. |
 
 ---
 
@@ -138,13 +139,32 @@ This document provides a comprehensive audit of all improvements made to the **E
 
 ---
 
+### 10. Interactive Discord Embeds, Milestone Deduplication & Dynamic Countdown
+* **Files Modified**: [`ekart_tracker/bot.py`](file:///d:/Shipment%20Tracker/ekart_tracker/bot.py), [`ekart_tracker/models.py`](file:///d:/Shipment%20Tracker/ekart_tracker/models.py), [`ekart_tracker/tracker.py`](file:///d:/Shipment%20Tracker/ekart_tracker/tracker.py), [`ekart_tracker/notifier.py`](file:///d:/Shipment%20Tracker/ekart_tracker/notifier.py)
+* **What was done**:
+  * **Interactive Action Buttons in Discord**:
+    * `🔄 Refresh`: Queries live Ekart data and updates the Discord message embed in-place without re-running commands.
+    * `🔔 Toggle Alerts`: Subscribes or mutes automated background notifications for the current channel with 1-click.
+    * `🔎 View on Ekart Portal`: Link button directly to Ekart's official tracking page.
+  * **Milestone Deduplication (`deduplicated_milestones`)**:
+    * Collapses rapid repetitive scans (e.g. twin scans logged 2 minutes apart at the same hub) into clean, non-redundant timeline entries.
+  * **Current Location Badge**:
+    * Instant at-a-glance hub/facility name (`📍 Current Location: Uluberia`).
+  * **Discord Native Dynamic Countdown**:
+    * Uses `<t:{epoch}:D>` and `<t:{epoch}:R>` for estimated delivery so Discord dynamically counts down (e.g. `in 2 days`) without line-wrapping truncation.
+* **Why it was done**:
+  * Elevates the Discord Bot experience to production-grade quality, providing instant user controls, clean aesthetics, and zero visual clutter.
+
+---
+
 ## 🧪 Verification & Test Coverage
 
-The automated test suite in [`tests/`](file:///d:/Shipment%20Tracker/tests) has been expanded from 17 to **22 comprehensive unit tests**:
+The automated test suite in [`tests/`](file:///d:/Shipment%20Tracker/tests) has been expanded from 17 to **23 comprehensive unit tests**:
 
 * `test_tracker.py`:
   * Tests CSRF token parsing from live HTML meta tags.
   * Tests response serialization into `ShipmentDetails` and `Milestone`.
+  * Tests milestone deduplication and `current_location` extraction.
   * Tests IST timestamp parsing, epoch conversion, and offset verification (`+0530`).
   * Tests input sanitization (`sanitize_tracking_id`).
   * Tests progress percentage and terminal state calculations.

@@ -213,10 +213,12 @@ class EkartLiveClient:
         reached_nearest_hub = bool(shipment_data.get("reachedNearestHub", False))
 
         expected_delivery_str = None
+        expected_epoch = None
         if expected_raw and expected_raw > 0:
             try:
+                expected_epoch = int(expected_raw / 1000)
                 dt = from_timestamp_ist(expected_raw)
-                expected_delivery_str = dt.strftime("%Y-%m-%d %I:%M %p IST")
+                expected_delivery_str = dt.strftime("%a, %b %d, %Y")
             except Exception:
                 expected_delivery_str = str(expected_raw)
 
@@ -262,6 +264,7 @@ class EkartLiveClient:
             tracking_id=tracking_id,
             status=current_status,
             expected_delivery_date=expected_delivery_str,
+            expected_delivery_epoch=expected_epoch,
             is_delivered=is_delivered,
             fa_shipment=fa_shipment,
             reached_nearest_hub=reached_nearest_hub,
@@ -329,13 +332,15 @@ class MockEkartClient:
                 timestamp=m_time
             ))
 
-        expected_dt = from_timestamp_ist((time.time() + 86400) * 1000)
-        expected_str = expected_dt.strftime("%Y-%m-%d %I:%M %p IST")
+        expected_epoch = int(time.time() + 86400)
+        expected_dt = from_timestamp_ist(expected_epoch * 1000)
+        expected_str = expected_dt.strftime("%a, %b %d, %Y")
 
         return ShipmentDetails(
             tracking_id=tracking_id,
             status=status_name,
             expected_delivery_date=expected_str,
+            expected_delivery_epoch=expected_epoch,
             is_delivered=is_delivered,
             fa_shipment=True,
             reached_nearest_hub=stage_idx >= 3,

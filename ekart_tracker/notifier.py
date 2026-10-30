@@ -235,11 +235,18 @@ class WebhookNotifier:
         )
 
         timeline_text = ""
-        if details.milestones:
-            for m in reversed(details.milestones[-4:]):
-                timeline_text += f"• **{m.date_str} {m.time_str}** ({m.city})\n  └ *{m.status_details}*\n"
+        milestones = details.deduplicated_milestones
+        if milestones:
+            for idx, m in enumerate(reversed(milestones[-4:])):
+                prefix = "🟢" if idx == 0 else "•"
+                timeline_text += f"{prefix} **{m.date_str} {m.time_str}** ({m.city})\n  └── *{m.status_details}*\n"
         else:
             timeline_text = "*No milestones recorded yet.*"
+
+        if details.expected_delivery_epoch:
+            eta_val = f"<t:{details.expected_delivery_epoch}:D>\n└ <t:{details.expected_delivery_epoch}:R>"
+        else:
+            eta_val = details.expected_delivery_date or "To be announced"
 
         payload = {
             "content": f"🔔 **Ekart Shipment Status Alert:** `{details.tracking_id}` is now **{details.status}**",
@@ -248,7 +255,9 @@ class WebhookNotifier:
                 "color": color,
                 "fields": [
                     {"name": "Status", "value": f"`{details.status}`", "inline": True},
-                    {"name": "Estimated Delivery", "value": details.expected_delivery_date or "To be announced", "inline": True},
+                    {"name": "Location", "value": f"📍 `{details.current_location}`", "inline": True},
+                    {"name": "Estimated Delivery", "value": eta_val, "inline": True},
+                    {"name": "Nearest Hub", "value": "✅ Arrived" if details.reached_nearest_hub else "⏳ On Route", "inline": True},
                     {"name": "Delivered", "value": "✅ YES" if details.is_delivered else "⏳ In Progress", "inline": True},
                     {"name": "Recent Milestones", "value": timeline_text, "inline": False}
                 ],
