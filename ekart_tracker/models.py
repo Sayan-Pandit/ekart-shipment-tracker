@@ -26,24 +26,35 @@ class ShipmentStatus:
             return cls.DELIVERED
         elif (
             "nearest hub" in s
-            or "motherhub" in s
+            or "at nearest hub" in s
+            or "delivery hub" in s
+            or "destination hub" in s
+            or "delivery center" in s
+            or "reached destination" in s
+        ):
+            return cls.REACHED_HUB
+        elif (
+            "motherhub" in s
             or "hub" in s
             or "facility" in s
             or "center" in s
             or "warehouse" in s
             or "dc" in s
             or "fmc" in s
-            or "reached" in s
-            or "arrived" in s
+            or "in transit" in s
+            or "dispatched" in s
+            or "bagged" in s
+            or "shipped" in s
+            or "forwarded" in s
+            or "connected" in s
+            or "departed" in s
+            or "loaded" in s
             or "received at" in s
+            or "arrived at" in s
+            or "reached" in s
         ):
-            # Check if moving between hubs vs arrived/received
-            if "dispatched" in s or "in transit" in s or "departed" in s or "loaded" in s or "bagged" in s or "shipped" in s or "forwarded" in s or "connected" in s:
-                return cls.IN_TRANSIT
-            elif "pickup" in s or "picked" in s:
+            if "pickup" in s or "picked" in s:
                 return cls.PICKED_UP
-            return cls.REACHED_HUB
-        elif "in transit" in s or "dispatched" in s or "bagged" in s or "shipped" in s or "forwarded" in s or "connected" in s:
             return cls.IN_TRANSIT
         elif "pickup" in s or "picked up" in s or "collected" in s:
             return cls.PICKED_UP
@@ -67,21 +78,13 @@ class ShipmentStatus:
             cls.RETURNED: 100,
             cls.UNKNOWN: 5,
         }
-        if norm in mapping:
-            return mapping[norm]
-
         s = status.strip().lower()
-        if "out for delivery" in s:
-            return 85
-        elif "motherhub" in s or "hub" in s or "facility" in s or "center" in s or "reached" in s or "arrived" in s:
-            return 70
-        elif "transit" in s or "dispatched" in s or "shipped" in s:
-            return 50
-        elif "pickup" in s or "picked" in s:
-            return 30
-        elif "create" in s or "manifest" in s:
-            return 15
-        return 10
+        # If in transit at an intermediate motherhub/facility, progress is 60%
+        if norm == cls.IN_TRANSIT and ("motherhub" in s or "hub" in s or "facility" in s):
+            if "received" in s or "arrived" in s or "at " in s:
+                return 60
+
+        return mapping.get(norm, 10)
 
     @classmethod
     def is_terminal_status(cls, status: str) -> bool:

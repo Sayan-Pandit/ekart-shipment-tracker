@@ -148,15 +148,18 @@ class TestEkartTracker(unittest.TestCase):
         from ekart_tracker.models import ShipmentDetails, Milestone
 
         # Test hub and motherhub normalization
-        self.assertEqual(ShipmentStatus.normalize("Received at Motherhub_ULB"), ShipmentStatus.REACHED_HUB)
-        self.assertEqual(ShipmentStatus.get_progress_percentage("Received at Motherhub_ULB"), 70)
+        self.assertEqual(ShipmentStatus.normalize("Received at Motherhub_ULB"), ShipmentStatus.IN_TRANSIT)
+        self.assertEqual(ShipmentStatus.get_progress_percentage("Received at Motherhub_ULB"), 60)
         self.assertEqual(ShipmentStatus.normalize("Dispatched to Motherhub_ULB"), ShipmentStatus.IN_TRANSIT)
         self.assertEqual(ShipmentStatus.get_progress_percentage("Dispatched to Motherhub_ULB"), 50)
+        self.assertEqual(ShipmentStatus.normalize("Received at Delivery Center"), ShipmentStatus.REACHED_HUB)
+        self.assertEqual(ShipmentStatus.get_progress_percentage("Received at Delivery Center"), 70)
 
         # Test monotonic progress across journey
         d = ShipmentDetails(
             tracking_id="FMPP4428292973",
             status="Received at Motherhub_ULB",
+            reached_nearest_hub=False,
             milestones=[
                 Milestone("Oct 30", "06:32 PM", "Nadia", "Shipment Created"),
                 Milestone("Oct 30", "06:32 PM", "Nadia", "Dispatched to Motherhub_HRN"),
@@ -164,7 +167,7 @@ class TestEkartTracker(unittest.TestCase):
                 Milestone("Oct 31", "03:27 AM", "Uluberia", "Received at Motherhub_ULB")
             ]
         )
-        self.assertEqual(d.progress_percentage, 70)
+        self.assertEqual(d.progress_percentage, 60)
 
         # Ensure that even if current status is temporarily unknown, progress does not regress
         d_unknown = ShipmentDetails(
