@@ -164,18 +164,33 @@ class ShipmentDetails:
         if current_norm in (ShipmentStatus.FAILED_ATTEMPT, ShipmentStatus.RETURNED):
             return ShipmentStatus.get_progress_percentage(current_norm)
 
-        base_pct = ShipmentStatus.get_progress_percentage(current_norm)
+        # Check if Out for Delivery
+        if current_norm == ShipmentStatus.OUT_FOR_DELIVERY or "out for delivery" in self.status.lower():
+            return 85
 
-        # If Ekart flagged reached_nearest_hub, progress is at least 70%
+        # Check if courier explicitly flagged reached_nearest_hub
         if self.reached_nearest_hub:
-            base_pct = max(base_pct, 70)
+            return 70
+
+        # Transit hubs / intermediate motherhubs
+        s = self.status.lower()
+        if "motherhub" in s or "hub" in s or "facility" in s or "center" in s:
+            if "dispatched" in s or "in transit" in s:
+                base_pct = 50
+            else:
+                base_pct = 60 # Received at regional sorting motherhub
+        else:
+            base_pct = ShipmentStatus.get_progress_percentage(current_norm)
 
         # Monotonicity: progress must never decrease from what previous milestones achieved!
         if self.milestones:
             for m in self.milestones:
+                m_s = m.status_details.lower()
                 m_norm = ShipmentStatus.normalize(m.status_details)
                 if m_norm not in (ShipmentStatus.FAILED_ATTEMPT, ShipmentStatus.RETURNED):
                     m_pct = ShipmentStatus.get_progress_percentage(m_norm)
+                    if "motherhub" in m_s or "hub" in m_s or "facility" in m_s:
+                        m_pct = max(m_pct, 50 if "dispatched" in m_s else 60)
                     if m_pct > base_pct and m_pct < 100:
                         base_pct = m_pct
 

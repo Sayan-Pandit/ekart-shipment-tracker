@@ -68,7 +68,20 @@ class ShipmentView(discord.ui.View):
 def get_progress_bar(target: Any) -> str:
     if isinstance(target, ShipmentDetails):
         pct = target.progress_percentage
-        norm = ShipmentStatus.normalize(target.status)
+        s = target.status.lower()
+        if target.is_delivered:
+            norm = ShipmentStatus.DELIVERED
+        elif "out for delivery" in s or "ofd" in s:
+            norm = ShipmentStatus.OUT_FOR_DELIVERY
+        elif target.reached_nearest_hub:
+            norm = ShipmentStatus.REACHED_HUB
+        elif "motherhub" in s or "hub" in s or "facility" in s:
+            if "dispatched" in s or "transit" in s:
+                norm = "In Transit (Dispatched)"
+            else:
+                norm = "In Transit (At Motherhub)"
+        else:
+            norm = ShipmentStatus.normalize(target.status)
     else:
         norm = ShipmentStatus.normalize(str(target))
         pct = ShipmentStatus.get_progress_percentage(norm)
