@@ -356,3 +356,4 @@ The test suite consists of **27 unit tests** across 4 modules running in ~2 seco
 
 * **Single Instance Poller**: Currently runs as a background thread inside the Flask process. For multi-node autoscaling, the poller can be decoupled into a Celery/Redis worker.
 * **Courier Portal Captcha**: Ekart's public API does not currently require captchas for moderate volume, but high-frequency requests (>100 req/min) may trigger Cloudflare/rate limits. The built-in 30-second TTL cache mitigates excessive calls.
+

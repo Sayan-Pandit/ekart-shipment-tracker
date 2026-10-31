@@ -18,19 +18,36 @@ class ShipmentStatus:
         if not raw_status:
             return cls.UNKNOWN
         s = raw_status.strip().lower()
-        if "out for delivery" in s:
+        if "out for delivery" in s or "ofd" in s:
             return cls.OUT_FOR_DELIVERY
-        elif "undelivered" in s or "failed" in s:
+        elif "undelivered" in s or "failed" in s or "attempted" in s or "rescheduled" in s:
             return cls.FAILED_ATTEMPT
         elif "delivered" in s:
             return cls.DELIVERED
-        elif "nearest hub" in s or "at hub" in s or "reached facility" in s or "received at facility" in s:
+        elif (
+            "nearest hub" in s
+            or "motherhub" in s
+            or "hub" in s
+            or "facility" in s
+            or "center" in s
+            or "warehouse" in s
+            or "dc" in s
+            or "fmc" in s
+            or "reached" in s
+            or "arrived" in s
+            or "received at" in s
+        ):
+            # Check if moving between hubs vs arrived/received
+            if "dispatched" in s or "in transit" in s or "departed" in s or "loaded" in s or "bagged" in s or "shipped" in s or "forwarded" in s or "connected" in s:
+                return cls.IN_TRANSIT
+            elif "pickup" in s or "picked" in s:
+                return cls.PICKED_UP
             return cls.REACHED_HUB
-        elif "in transit" in s or "dispatched" in s or "bagged" in s or "shipped" in s:
+        elif "in transit" in s or "dispatched" in s or "bagged" in s or "shipped" in s or "forwarded" in s or "connected" in s:
             return cls.IN_TRANSIT
-        elif "pickup" in s or "picked up" in s:
+        elif "pickup" in s or "picked up" in s or "collected" in s:
             return cls.PICKED_UP
-        elif "order created" in s or "manifest" in s:
+        elif "order created" in s or "manifest" in s or "created" in s:
             return cls.ORDER_CREATED
         elif "return" in s or "cancelled" in s:
             return cls.RETURNED
@@ -50,7 +67,21 @@ class ShipmentStatus:
             cls.RETURNED: 100,
             cls.UNKNOWN: 5,
         }
-        return mapping.get(norm, 10)
+        if norm in mapping:
+            return mapping[norm]
+
+        s = status.strip().lower()
+        if "out for delivery" in s:
+            return 85
+        elif "motherhub" in s or "hub" in s or "facility" in s or "center" in s or "reached" in s or "arrived" in s:
+            return 70
+        elif "transit" in s or "dispatched" in s or "shipped" in s:
+            return 50
+        elif "pickup" in s or "picked" in s:
+            return 30
+        elif "create" in s or "manifest" in s:
+            return 15
+        return 10
 
     @classmethod
     def is_terminal_status(cls, status: str) -> bool:
@@ -126,7 +157,29 @@ class ShipmentDetails:
 
     @property
     def progress_percentage(self) -> int:
-        return ShipmentStatus.get_progress_percentage(self.status)
+        if self.is_delivered:
+            return 100
+
+        current_norm = ShipmentStatus.normalize(self.status)
+        if current_norm in (ShipmentStatus.FAILED_ATTEMPT, ShipmentStatus.RETURNED):
+            return ShipmentStatus.get_progress_percentage(current_norm)
+
+        base_pct = ShipmentStatus.get_progress_percentage(current_norm)
+
+        # If Ekart flagged reached_nearest_hub, progress is at least 70%
+        if self.reached_nearest_hub:
+            base_pct = max(base_pct, 70)
+
+        # Monotonicity: progress must never decrease from what previous milestones achieved!
+        if self.milestones:
+            for m in self.milestones:
+                m_norm = ShipmentStatus.normalize(m.status_details)
+                if m_norm not in (ShipmentStatus.FAILED_ATTEMPT, ShipmentStatus.RETURNED):
+                    m_pct = ShipmentStatus.get_progress_percentage(m_norm)
+                    if m_pct > base_pct and m_pct < 100:
+                        base_pct = m_pct
+
+        return base_pct
 
     @property
     def is_terminal(self) -> bool:

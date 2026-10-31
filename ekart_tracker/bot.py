@@ -65,10 +65,15 @@ class ShipmentView(discord.ui.View):
             self.storage.update_notify_target(self.tracking_id, channel_id)
             await interaction.response.send_message(f"🔔 **Subscribed!** Notifications for `{self.tracking_id}` will now route to this channel.", ephemeral=True)
 
-def get_progress_bar(status: str) -> str:
-    norm = ShipmentStatus.normalize(status)
-    pct = ShipmentStatus.get_progress_percentage(norm)
-    filled = min(5, max(1, pct // 20))
+def get_progress_bar(target: Any) -> str:
+    if isinstance(target, ShipmentDetails):
+        pct = target.progress_percentage
+        norm = ShipmentStatus.normalize(target.status)
+    else:
+        norm = ShipmentStatus.normalize(str(target))
+        pct = ShipmentStatus.get_progress_percentage(norm)
+
+    filled = min(5, max(1, round(pct / 20)))
     bar = "🟩" * filled + "⬜" * (5 - filled)
     return f"`[{bar}]` **{pct}%** ({norm})"
 
@@ -81,11 +86,11 @@ def create_discord_embed(details: ShipmentDetails, event_type: str = "Status", l
         status_icon = "🏁"
     elif "out for delivery" in status_lower:
         status_icon = "🚚"
-    elif "nearest hub" in status_lower:
+    elif "hub" in status_lower or "facility" in status_lower or "center" in status_lower or "nearest" in status_lower:
         status_icon = "📍"
-    elif "in transit" in status_lower:
+    elif "in transit" in status_lower or "dispatched" in status_lower or "shipped" in status_lower:
         status_icon = "🚛"
-    elif "picked up" in status_lower:
+    elif "picked up" in status_lower or "pickup" in status_lower:
         status_icon = "📦"
     else:
         status_icon = "📦"
@@ -95,7 +100,7 @@ def create_discord_embed(details: ShipmentDetails, event_type: str = "Status", l
     embed.set_author(name="Ekart Logistics Tracker", icon_url=EKART_LOGO_URL)
     # Note: We omit embed.set_thumbnail() so mobile Discord gets 100% full width without text squeezing
 
-    progress_str = get_progress_bar(details.status)
+    progress_str = get_progress_bar(details)
     desc_lines = []
     clean_lbl = label.strip() if label else ""
     if clean_lbl and clean_lbl != f"Package {details.tracking_id}":
