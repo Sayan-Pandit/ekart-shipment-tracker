@@ -137,7 +137,7 @@ class EmailNotifier:
               <div class="info-box">
                 <p style="margin: 4px 0;"><strong>Estimated Delivery:</strong> {clean_eta}</p>
                 <p style="margin: 4px 0;"><strong>Delivered:</strong> {'✅ Yes' if details.is_delivered else '⏳ In Progress'}</p>
-                <p style="margin: 4px 0;"><strong>Nearest Hub:</strong> {'Reached' if details.reached_nearest_hub else 'In Transit'}</p>
+                <p style="margin: 4px 0;"><strong>Nearest Hub:</strong> {details.nearest_hub_display}</p>
               </div>
               <h4 style="margin: 20px 0 8px; font-size: 15px; color: #1f2937;">Activity Timeline</h4>
               <table>
@@ -258,7 +258,7 @@ class WebhookNotifier:
                     {"name": "Status", "value": f"`{details.status}`", "inline": True},
                     {"name": "Location", "value": f"📍 `{details.current_location}`", "inline": True},
                     {"name": "Estimated Delivery", "value": eta_val, "inline": False},
-                    {"name": "Nearest Hub", "value": "✅ Arrived" if details.reached_nearest_hub else "⏳ On Route", "inline": True},
+                    {"name": "Nearest Hub", "value": details.nearest_hub_display, "inline": True},
                     {"name": "Delivered", "value": "✅ YES" if details.is_delivered else "⏳ In Progress", "inline": True},
                     {"name": "Recent Milestones", "value": timeline_text, "inline": False}
                 ],

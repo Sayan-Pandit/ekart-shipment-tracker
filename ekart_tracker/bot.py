@@ -74,7 +74,10 @@ def get_progress_bar(target: Any) -> str:
         elif "out for delivery" in s or "ofd" in s:
             norm = ShipmentStatus.OUT_FOR_DELIVERY
         elif target.reached_nearest_hub:
-            norm = ShipmentStatus.REACHED_HUB
+            if "dispatched" in s or "transit" in s:
+                norm = "Dispatched to Nearest Hub"
+            else:
+                norm = ShipmentStatus.REACHED_HUB
         elif "motherhub" in s or "hub" in s or "facility" in s:
             if "dispatched" in s or "transit" in s:
                 norm = "In Transit (Dispatched)"
@@ -132,7 +135,7 @@ def create_discord_embed(details: ShipmentDetails, event_type: str = "Status", l
         eta_val = "*To be announced*"
 
     embed.add_field(name="📅 Estimated Delivery", value=eta_val, inline=False)
-    embed.add_field(name="📍 Nearest Hub", value="✅ Arrived" if details.reached_nearest_hub else "⏳ On Route", inline=True)
+    embed.add_field(name="📍 Nearest Hub", value=details.nearest_hub_display, inline=True)
     embed.add_field(name="🏁 Delivered", value="✅ YES" if details.is_delivered else "⏳ In Progress", inline=True)
 
     # Mobile-optimized deduplicated milestones timeline

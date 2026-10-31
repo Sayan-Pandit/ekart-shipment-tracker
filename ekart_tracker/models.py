@@ -204,6 +204,16 @@ class ShipmentDetails:
         return self.is_delivered or ShipmentStatus.is_terminal_status(self.status)
 
     @property
+    def nearest_hub_display(self) -> str:
+        """User-friendly status of the nearest/delivery hub stage."""
+        if not self.reached_nearest_hub:
+            return "⏳ On Route"
+        s = self.status.lower()
+        if "dispatched" in s or "transit" in s:
+            return "🚛 Dispatched to Hub"
+        return "✅ Arrived"
+
+    @property
     def current_location(self) -> str:
         """Return the most recent hub/city location or transit state."""
         if self.milestones:

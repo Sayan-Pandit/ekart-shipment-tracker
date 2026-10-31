@@ -271,10 +271,8 @@ class EkartLiveClient:
             norm = ShipmentStatus.normalize(latest_status)
             if norm in (ShipmentStatus.DELIVERED, ShipmentStatus.OUT_FOR_DELIVERY, ShipmentStatus.FAILED_ATTEMPT, ShipmentStatus.RETURNED):
                 current_status = norm
-            elif reached_nearest_hub:
-                current_status = ShipmentStatus.REACHED_HUB
             else:
-                # Preserve the exact courier status text (e.g. "Received at Motherhub_ULB")
+                # Preserve the exact courier status text (e.g. "Dispatched to DiamondHarbourHub_KOL")
                 current_status = latest_status
         elif reached_nearest_hub:
             current_status = ShipmentStatus.REACHED_HUB
